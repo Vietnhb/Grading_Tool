@@ -1,0 +1,72 @@
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+
+import '../core/app_exception.dart';
+import '../core/file_name_utils.dart';
+import 'submission_models.dart';
+
+class PackageDetector {
+  Future<ExamPackage> detect(String path) async {
+    final root = Directory(path);
+    if (!await root.exists()) {
+      throw const AppException('Please Select Exam package folder.');
+    }
+
+    final rootFiles = await _files(root);
+    final solutions = Directory(p.join(root.path, 'Student_Solutions'));
+    if (!solutions.existsSync()) {
+      throw const AppException('Student_Solutions folder not found.');
+    }
+
+    final studentFiles =
+        (await _files(
+            solutions,
+          )).where((file) => extensionOf(file) == '.txt').toList()
+          ..sort((a, b) => compareAliases(aliasFromFile(a), aliasFromFile(b)));
+    if (studentFiles.isEmpty) {
+      throw const AppException('Student Solutions student empty.');
+    }
+
+    return ExamPackage(
+      rootDirectory: root,
+      markSheetFile: _single(
+        rootFiles,
+        (file) => {'.xlsx'}.contains(extensionOf(file)),
+        'No XLSX mark input file was found.',
+        'More than one XLSX mark input file was found.',
+      ),
+      studentFiles: studentFiles,
+      gradingGuideFile: _single(
+        rootFiles,
+        (file) => extensionOf(file) == '.docx',
+        'No DOCX grading guide was found.',
+        'More than one DOCX grading guide was found.',
+      ),
+      questionImageFile: _single(
+        rootFiles,
+        (file) => {'.png', '.jpg', '.jpeg'}.contains(extensionOf(file)),
+        'No question image was found.',
+        'More than one question image was found.',
+      ),
+    );
+  }
+
+  Future<List<File>> _files(Directory directory) => directory
+      .list(followLinks: false)
+      .where((entity) => entity is File)
+      .cast<File>()
+      .toList();
+
+  File _single(
+    List<File> files,
+    bool Function(File file) test,
+    String missing,
+    String duplicated,
+  ) {
+    final matches = files.where(test).toList();
+    if (matches.isEmpty) throw AppException(missing);
+    if (matches.length > 1) throw AppException(duplicated);
+    return matches.single;
+  }
+}
