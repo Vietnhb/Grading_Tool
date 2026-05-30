@@ -6,7 +6,6 @@ import '../grading/grading_controller.dart';
 import '../core/file_name_utils.dart';
 import 'drop_package_panel.dart';
 import 'grading_panel.dart';
-import 'student_sidebar.dart';
 import 'submission_viewer.dart';
 import 'top_status_bar.dart';
 
@@ -70,8 +69,6 @@ class GradingHomeView extends ConsumerWidget {
                 ? _LoadedWorkspace(
                     controller: controller,
                     onMove: (move) => _move(context, ref, move),
-                    onSelectStudent: (index) =>
-                        _move(context, ref, () => controller.goToIndex(index)),
                   )
                 : const _EmptyWorkspace(),
           ),
@@ -145,12 +142,10 @@ class _LoadedWorkspace extends StatelessWidget {
   const _LoadedWorkspace({
     required this.controller,
     required this.onMove,
-    required this.onSelectStudent,
   });
 
   final GradingController controller;
   final Future<void> Function(Future<bool> Function() move) onMove;
-  final ValueChanged<int> onSelectStudent;
 
   @override
   Widget build(BuildContext context) {
@@ -162,7 +157,6 @@ class _LoadedWorkspace extends StatelessWidget {
         Expanded(
           child: Row(
             children: [
-              _StudentListArea(onSelectStudent: onSelectStudent),
               const Expanded(child: _SubmissionArea()),
               _GradingArea(controller: controller),
             ],
@@ -185,6 +179,7 @@ class _StatusArea extends ConsumerWidget {
     // Doi marker se goi controller.selectMarker(marker).
     final state = ref.watch(gradingControllerProvider);
     return TopStatusBar(
+      currentIndex: state.currentIndex,
       gradedCount: state.gradedCount,
       totalStudents: state.totalStudents,
       markerOptions: state.markerOptions,
@@ -197,8 +192,10 @@ class _StatusArea extends ConsumerWidget {
           onMove(() => controller.selectMarker(marker)),
       onAiSettings: () => _showAiSettingsDialog(context, controller, state),
       onOpenPackage: controller.openPackageFolder,
+      onFirst: () => onMove(() => controller.goToIndex(0)),
       onPrevious: () => onMove(controller.previousStudent),
       onNext: () => onMove(controller.nextStudent),
+      onLast: () => onMove(() => controller.goToIndex(state.visibleSubmissions.length - 1)),
     );
   }
 
@@ -317,33 +314,6 @@ class _StatusArea extends ConsumerWidget {
   }
 }
 
-class _StudentListArea extends ConsumerWidget {
-  const _StudentListArea({required this.onSelectStudent});
-
-  final ValueChanged<int> onSelectStudent;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Sidebar hien danh sach alias dang visible theo marker hien tai.
-    // Click sinh vien se goi controller.goToIndex(index).
-    final state = ref.watch(gradingControllerProvider);
-    final visibleSubmissions = state.visibleSubmissions;
-    final aliases = visibleSubmissions.map(aliasFromFile).toList();
-    final aliasSet = aliases.toSet();
-    final gradedAliases = state.entries.values
-        .where((entry) => aliasSet.contains(entry.alias))
-        .where((entry) => entry.isComplete)
-        .map((entry) => entry.alias)
-        .toSet();
-
-    return StudentSidebar(
-      aliases: aliases,
-      currentIndex: state.currentIndex,
-      gradedAliases: gradedAliases,
-      onSelect: onSelectStudent,
-    );
-  }
-}
 
 class _SubmissionArea extends ConsumerWidget {
   const _SubmissionArea();

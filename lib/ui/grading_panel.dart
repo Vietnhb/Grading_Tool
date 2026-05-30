@@ -108,38 +108,53 @@ class _GradingPanelState extends State<GradingPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Alias ${widget.entry.alias}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 10),
                   Row(
                     children: [
-                      const Text('Auto save'),
-                      const Spacer(),
-                      Switch(
-                        value: widget.autoSave,
-                        onChanged: widget.onAutoSaveChanged,
+                      Expanded(
+                        child: Text(
+                          'Alias ${widget.entry.alias}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: const Color(0xFF1A1C1C)),
+                        ),
+                      ),
+                      const Text('Auto save', style: TextStyle(fontSize: 12, color: Color(0xFF6B7272), fontWeight: FontWeight.w500)),
+                      const SizedBox(width: 4),
+                      Transform.scale(
+                        scale: 0.8,
+                        child: Switch(
+                          value: widget.autoSave,
+                          onChanged: widget.onAutoSaveChanged,
+                          activeColor: const Color(0xFF2E7D7D),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   if (widget.showMarker) ...[
-                    InputDecorator(
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        labelText: 'Assigned marker',
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F5F5),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(
-                        widget.entry.marker.isEmpty ? '-' : widget.entry.marker,
-                        overflow: TextOverflow.ellipsis,
+                      child: Row(
+                        children: [
+                          const Icon(Icons.person_outline_rounded, size: 16, color: Color(0xFF6B7272)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              widget.entry.marker.isEmpty ? 'Unassigned' : widget.entry.marker,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Color(0xFF4A5252), fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const Divider(height: 24),
+                    const SizedBox(height: 24),
                   ] else
-                    const Divider(height: 24),
+                    const SizedBox(height: 12),
                   if (widget.rubricCriteria.isEmpty)
                     _QuestionScoreFields(
                       controllers: _scoreControllers,
@@ -156,18 +171,19 @@ class _GradingPanelState extends State<GradingPanel> {
                       onCriterionScoreChanged: widget.onCriterionScoreChanged,
                     ),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
+                    margin: const EdgeInsets.only(top: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F3F1),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    color: const Color(0xFFF1F4F4),
                     child: Row(
                       children: [
-                        const Text('Total'),
+                        const Text('Total Score', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E4C4C), fontSize: 15)),
                         const Spacer(),
                         Text(
                           widget.entry.total.toString(),
-                          style: Theme.of(context).textTheme.titleMedium,
+                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF1E4C4C)),
                         ),
                       ],
                     ),
@@ -175,48 +191,73 @@ class _GradingPanelState extends State<GradingPanel> {
                   const SizedBox(height: 14),
                   TextField(
                     controller: _commentController,
-                    minLines: 5,
+                    minLines: 4,
                     maxLines: 8,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      labelText: 'Comment',
+                    style: const TextStyle(fontSize: 14),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: const Color(0xFFFAFCFC),
+                      hintText: 'Add a comment...',
+                      hintStyle: const TextStyle(color: Color(0xFFA0A7A7), fontSize: 14),
+                      contentPadding: const EdgeInsets.all(14),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFFE0E5E5)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF2E7D7D), width: 1.5),
+                      ),
                     ),
                     onChanged: widget.onCommentChanged,
-                    // Comment thay doi -> GradingController.updateComment.
                   ),
                   const SizedBox(height: 8),
                 ],
               ),
             ),
           ),
-          const Divider(height: 18),
+          const SizedBox(height: 16),
           SizedBox(
-            height: 40,
-            child: OutlinedButton.icon(
+            height: 48,
+            child: FilledButton.icon(
               onPressed: widget.isAiGrading ? null : widget.onAiSuggest,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF2B73C2),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
               icon: widget.isAiGrading
                   ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                     )
-                  : const Icon(Icons.auto_awesome),
-              label: Text(widget.isAiGrading ? 'AI grading...' : 'AI Suggest'),
+                  : const Icon(Icons.auto_awesome_rounded, size: 20),
+              label: Text(widget.isAiGrading ? 'AI grading...' : 'AI Suggest', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           SizedBox(
-            height: 44,
+            height: 48,
             child: FilledButton.icon(
               onPressed: widget.isSaving || !widget.isDirty || _hasAnyError()
                   ? null
                   : widget.onSave,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1E4C4C),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: const Color(0xFFE0E5E5),
+                disabledForegroundColor: const Color(0xFF98A2A2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
               icon: widget.isSaving
                   ? const SizedBox.square(
-                      dimension: 16,
+                      dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.save),
-              label: Text(widget.isDirty ? 'Save' : 'Saved'),
+                  : const Icon(Icons.save_rounded, size: 20),
+              label: Text(widget.isDirty ? 'Save Changes' : 'Saved', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
             ),
           ),
         ],
@@ -366,73 +407,95 @@ class _CriterionScoreFields extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final group in groups.entries)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFD8DEDE)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          'Question ${group.key + 1}',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const Spacer(),
-                        Text(
-                          '${questionScores[group.key] ?? 0}/${_maxFor(group.value)}',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    for (final criterion in group.value)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 7),
-                                child: Text(
-                                  '${criterion.id} ${criterion.title}',
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            SizedBox(
-                              width: 72,
-                              child: TextField(
-                                controller: controllers[criterion.id],
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                ],
-                                decoration: InputDecoration(
-                                  isDense: true,
-                                  labelText: '/${criterion.maxScore}',
-                                ),
-                                onChanged: (value) => onCriterionScoreChanged(
-                                  criterion.id,
-                                  int.tryParse(value.trim()),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFAFCFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFEFF2F2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF0F5F5),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Question ${group.key + 1}',
+                        style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF2E7D7D), fontSize: 13),
                       ),
-                  ],
+                      const Spacer(),
+                      Text(
+                        '${questionScores[group.key] ?? 0} / ${_maxFor(group.value)}',
+                        style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E4C4C), fontSize: 13),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                  child: Column(
+                    children: [
+                      for (final criterion in group.value)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    '${criterion.id} ${criterion.title}',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 13, color: Color(0xFF4A5252), height: 1.4, fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              SizedBox(
+                                width: 68,
+                                child: TextField(
+                                  controller: controllers[criterion.id],
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1C1C)),
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    hintText: '/${criterion.maxScore}',
+                                    hintStyle: const TextStyle(color: Color(0xFFB0B7B7)),
+                                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(color: Color(0xFFE0E5E5)),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      borderSide: const BorderSide(color: Color(0xFF2E7D7D), width: 1.5),
+                                    ),
+                                  ),
+                                  onChanged: (value) => onCriterionScoreChanged(
+                                    criterion.id,
+                                    int.tryParse(value.trim()),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
       ],
