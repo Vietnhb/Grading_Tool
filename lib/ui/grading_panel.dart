@@ -20,6 +20,7 @@ class GradingPanel extends StatefulWidget {
     required this.onAiSuggest,
     required this.onSave,
     this.showMarker = true,
+    this.maxScores = const {},
     super.key,
   });
 
@@ -31,6 +32,7 @@ class GradingPanel extends StatefulWidget {
   final List<AiRubricCriterion> rubricCriteria;
   final Map<String, int?> criterionScores;
   final bool showMarker;
+  final Map<int, int> maxScores;
   final void Function(int questionIndex, int? score) onScoreChanged;
   final void Function(String criterionId, int? score) onCriterionScoreChanged;
   final ValueChanged<String> onCommentChanged;
@@ -142,6 +144,7 @@ class _GradingPanelState extends State<GradingPanel> {
                     _QuestionScoreFields(
                       controllers: _scoreControllers,
                       entry: widget.entry,
+                      maxScores: widget.maxScores,
                       onScoreChanged: widget.onScoreChanged,
                     )
                   else
@@ -204,7 +207,7 @@ class _GradingPanelState extends State<GradingPanel> {
           SizedBox(
             height: 44,
             child: FilledButton.icon(
-              onPressed: widget.isSaving || !widget.isDirty
+              onPressed: widget.isSaving || !widget.isDirty || _hasAnyError()
                   ? null
                   : widget.onSave,
               icon: widget.isSaving
@@ -278,18 +281,39 @@ class _GradingPanelState extends State<GradingPanel> {
         ),
     };
   }
+
+  bool _hasScoreError(int index) {
+    final score = widget.entry.requestScores[index];
+    final maxScore = widget.maxScores[index];
+    return score != null && maxScore != null && score > maxScore;
+  }
+
+  bool _hasAnyError() {
+    for (var i = 0; i < widget.entry.requestScores.length; i++) {
+      if (_hasScoreError(i)) return true;
+    }
+    return false;
+  }
 }
 
 class _QuestionScoreFields extends StatelessWidget {
   const _QuestionScoreFields({
     required this.controllers,
     required this.entry,
+    required this.maxScores,
     required this.onScoreChanged,
   });
 
   final List<TextEditingController> controllers;
   final GradingEntry entry;
+  final Map<int, int> maxScores;
   final void Function(int questionIndex, int? score) onScoreChanged;
+
+  bool _hasScoreError(int index) {
+    final score = entry.requestScores[index];
+    final maxScore = maxScores[index];
+    return score != null && maxScore != null && score > maxScore;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -305,6 +329,7 @@ class _QuestionScoreFields extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 labelText: 'Question ${index + 1}',
+                errorText: _hasScoreError(index) ? 'Max: ${maxScores[index]}' : null,
               ),
               onChanged: (value) =>
                   onScoreChanged(index, int.tryParse(value.trim())),

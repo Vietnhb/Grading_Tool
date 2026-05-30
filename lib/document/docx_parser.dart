@@ -50,7 +50,34 @@ class DocxDocumentParser {
           if (table.rows.isNotEmpty) _add(table);
       }
     }
-    return GradingGuide(_blocks);
+    final maxScores = _extractMaxScores(_blocks);
+    return GradingGuide(_blocks, maxScores: maxScores);
+  }
+
+  Map<int, int> _extractMaxScores(List<DocumentBlock> blocks) {
+    final scores = <int, int>{};
+    for (final block in blocks) {
+      if (block is RubricTableBlock) {
+        for (final row in block.rows) {
+          if (row.isHeader || row.cells.length < 2) continue;
+          final cell0 = row.cells[0].toLowerCase();
+          final cell1 = row.cells[1].toLowerCase();
+          
+          final match = RegExp(r'(?:yêu cầu|question)\s*(\d+)').firstMatch(cell0);
+          if (match != null) {
+            final qIdx = int.parse(match.group(1)!) - 1;
+            final scoreMatch = RegExp(r'(\d+)').firstMatch(cell1);
+            if (scoreMatch != null) {
+              scores[qIdx] = int.parse(scoreMatch.group(1)!);
+            }
+          }
+        }
+      }
+      if (block is SectionBlock) {
+        scores.addAll(_extractMaxScores(block.children));
+      }
+    }
+    return scores;
   }
 
   void _paragraph(XmlElement paragraph) {
