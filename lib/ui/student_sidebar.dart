@@ -44,45 +44,51 @@ class _StudentSidebarState extends State<StudentSidebar> {
   @override
   Widget build(BuildContext context) {
     final width = _width ??= _sidebarWidth(context, _items);
-    return Container(
-      width: width,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(right: BorderSide(color: Color(0xFFE0E5E5))),
-      ),
-      child: ListView.builder(
-        key: const PageStorageKey('student-sidebar-scroll'),
-        itemCount: _items.length,
-        itemBuilder: (context, displayIndex) {
-          final item = _items[displayIndex];
-          final selected = item.index == widget.currentIndex;
-          final graded = widget.gradedAliases.contains(item.alias);
-          return ListTile(
-            dense: true,
-            selected: selected,
-            selectedColor: const Color(0xFF0D2F2F),
-            selectedTileColor: const Color(0xFFD3E5E1),
-            shape: Border(
-              left: BorderSide(
-                width: 4,
-                color: selected ? const Color(0xFF173D3D) : Colors.transparent,
+    return Material(
+      color: Colors.white,
+      child: Container(
+        width: width,
+        decoration: const BoxDecoration(
+          border: Border(right: BorderSide(color: Color(0xFFE0E5E5))),
+        ),
+        child: ListView.builder(
+          key: const PageStorageKey('student-sidebar-scroll'),
+          itemCount: _items.length,
+          itemBuilder: (context, displayIndex) {
+            final item = _items[displayIndex];
+            final selected = item.index == widget.currentIndex;
+            final graded = widget.gradedAliases.contains(item.alias);
+            return ListTile(
+              dense: true,
+              selected: selected,
+              selectedColor: const Color(0xFF0D2F2F),
+              selectedTileColor: const Color(0xFFD3E5E1),
+              shape: Border(
+                left: BorderSide(
+                  width: 4,
+                  color: selected
+                      ? const Color(0xFF173D3D)
+                      : Colors.transparent,
+                ),
               ),
-            ),
-            leading: Icon(
-              graded ? Icons.check_circle : Icons.radio_button_unchecked,
-              size: 18,
-              color: graded ? const Color(0xFF2F5E5E) : const Color(0xFF98A2A2),
-            ),
-            title: Text(
-              item.alias,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w400,
+              leading: Icon(
+                graded ? Icons.check_circle : Icons.radio_button_unchecked,
+                size: 18,
+                color: graded
+                    ? const Color(0xFF2F5E5E)
+                    : const Color(0xFF98A2A2),
               ),
-            ),
-            onTap: () => widget.onSelect(item.index),
-          );
-        },
+              title: Text(
+                item.alias,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w400,
+                ),
+              ),
+              onTap: () => widget.onSelect(item.index),
+            );
+          },
+        ),
       ),
     );
   }

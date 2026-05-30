@@ -15,11 +15,14 @@ class GradingHomeView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Doc state tu GradingController de biet da load package hay chua.
+    // Neu chua co package -> DropPackagePanel; neu co -> _LoadedWorkspace.
     final hasPackage = ref.watch(
       gradingControllerProvider.select((state) => state.hasPackage),
     );
     final controller = ref.read(gradingControllerProvider.notifier);
 
+    // Lang nghe loi tu controller. Khi package/docx/xlsx loi thi hien SnackBar.
     ref.listen(
       gradingControllerProvider.select((value) => value.errorMessage),
       (previous, next) {
@@ -48,6 +51,7 @@ class GradingHomeView extends ConsumerWidget {
         SingleActivator(LogicalKeyboardKey.keyS, control: true): _SaveIntent(),
       },
       child: Actions(
+        // Gan phim tat vao cac ham dieu huong/luu trong GradingController.
         actions: {
           _PreviousIntent: CallbackAction<_PreviousIntent>(
             onInvoke: (_) => _move(context, ref, controller.previousStudent),
@@ -81,6 +85,8 @@ class GradingHomeView extends ConsumerWidget {
     WidgetRef ref,
     Future<bool> Function() move,
   ) async {
+    // Truoc khi doi sinh vien/marker: neu autosave tat va co sua chua luu,
+    // hoi user co discard khong. Sau do moi goi ham move tiep theo.
     final state = ref.read(gradingControllerProvider);
     if (!state.autoSave && state.isDirty) {
       final discard = await _confirmDiscard(context);
@@ -121,6 +127,8 @@ class _EmptyWorkspace extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Man hinh dau tien: chon/keo tha folder. Callback tiep theo:
+    // GradingController.loadPackage(path).
     final isLoading = ref.watch(
       gradingControllerProvider.select((state) => state.isLoading),
     );
@@ -146,6 +154,8 @@ class _LoadedWorkspace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Workspace sau khi load package: tren la status bar,
+    // trai la danh sach sinh vien, giua la bai nop/rubric/de, phai la panel cham.
     return Column(
       children: [
         _StatusArea(controller: controller, onMove: onMove),
@@ -171,6 +181,8 @@ class _StatusArea extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Top bar lay thong tin tien do, marker filter va nut dieu huong.
+    // Doi marker se goi controller.selectMarker(marker).
     final state = ref.watch(gradingControllerProvider);
     return TopStatusBar(
       gradedCount: state.gradedCount,
@@ -178,12 +190,130 @@ class _StatusArea extends ConsumerWidget {
       markerOptions: state.markerOptions,
       selectedMarker: state.selectedMarker,
       packagePath: state.package?.rootDirectory.path ?? '',
+      aiReady: state.aiReady,
+      aiReadyLabel: state.aiReadyLabel,
+      aiProviderStatus: _aiProviderStatus(state),
       onMarkerChanged: (marker) =>
           onMove(() => controller.selectMarker(marker)),
+      onAiSettings: () => _showAiSettingsDialog(context, controller, state),
       onOpenPackage: controller.openPackageFolder,
       onPrevious: () => onMove(controller.previousStudent),
       onNext: () => onMove(controller.nextStudent),
     );
+  }
+
+  Future<void> _showAiSettingsDialog(
+    BuildContext context,
+    GradingController controller,
+    GradingState state,
+  ) async {
+    final openRouterKeyController = TextEditingController();
+    final openRouterModelController = TextEditingController(
+      text: state.openRouterModel,
+    );
+    var obscure = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('AI Settings'),
+              content: SizedBox(
+                width: 460,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.hub, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'OpenRouter',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    if (state.openRouterApiKeyConfigured)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          'Current key: ${state.openRouterApiKeyPreview}',
+                        ),
+                      ),
+                    TextField(
+                      controller: openRouterKeyController,
+                      obscureText: obscure,
+                      decoration: InputDecoration(
+                        labelText: 'OpenRouter API key',
+                        hintText: state.openRouterApiKeyConfigured
+                            ? 'Paste a new key to replace current key'
+                            : 'sk-or-v1-...',
+                        suffixIcon: IconButton(
+                          tooltip: obscure ? 'Show key' : 'Hide key',
+                          onPressed: () =>
+                              setDialogState(() => obscure = !obscure),
+                          icon: Icon(
+                            obscure ? Icons.visibility : Icons.visibility_off,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: openRouterModelController,
+                      decoration: const InputDecoration(
+                        labelText: 'OpenRouter model',
+                        hintText: 'meta-llama/llama-3.1-8b-instruct:free',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                if (state.openRouterApiKeyConfigured)
+                  TextButton(
+                    onPressed: () async {
+                      await controller.clearOpenRouterApiKey();
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                    child: const Text('Clear'),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    await controller.saveAiSettings(
+                      openRouterApiKey: openRouterKeyController.text.trim(),
+                      openRouterModel: openRouterModelController.text.trim(),
+                    );
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    } finally {
+      openRouterKeyController.dispose();
+      openRouterModelController.dispose();
+    }
+  }
+
+  String _aiProviderStatus(GradingState state) {
+    return state.openRouterApiKeyConfigured
+        ? 'OpenRouter: ${state.openRouterModel} (${state.openRouterApiKeyPreview})'
+        : 'Set OpenRouter API key';
   }
 }
 
@@ -194,6 +324,8 @@ class _StudentListArea extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Sidebar hien danh sach alias dang visible theo marker hien tai.
+    // Click sinh vien se goi controller.goToIndex(index).
     final state = ref.watch(gradingControllerProvider);
     final visibleSubmissions = state.visibleSubmissions;
     final aliases = visibleSubmissions.map(aliasFromFile).toList();
@@ -218,6 +350,8 @@ class _SubmissionArea extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Khu vuc xem bai: lay currentSubmission da parse tu SubmissionParser.
+    // Neu null thi dang loading bai nop.
     final submission = ref.watch(
       gradingControllerProvider.select((state) => state.currentSubmission),
     );
@@ -249,6 +383,8 @@ class _GradingArea extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Panel cham diem ben phai. Moi thay doi diem/comment se day ve controller,
+    // controller cap nhat GradingEntry va danh dau isDirty.
     final state = ref.watch(gradingControllerProvider);
     final submission = state.currentSubmission;
     final entry = state.currentEntry;
@@ -261,10 +397,15 @@ class _GradingArea extends ConsumerWidget {
       autoSave: state.autoSave,
       isDirty: state.isDirty,
       isSaving: state.isSaving,
+      isAiGrading: state.isAiGrading,
+      rubricCriteria: state.rubricCriteria,
+      criterionScores: state.currentCriterionScores,
       showMarker: state.selectedMarker.isNotEmpty,
       onScoreChanged: controller.updateScore,
+      onCriterionScoreChanged: controller.updateCriterionScore,
       onCommentChanged: controller.updateComment,
       onAutoSaveChanged: controller.setAutoSave,
+      onAiSuggest: controller.suggestAiGrade,
       onSave: controller.saveCurrent,
     );
   }

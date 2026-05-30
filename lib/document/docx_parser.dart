@@ -11,6 +11,8 @@ class DocxTextReader {
   const DocxTextReader();
 
   Future<GradingGuide> read(File file) async {
+    // DOCX la file zip. Lay word/document.xml roi dua sang DocxDocumentParser
+    // de chuyen thanh cac block ma SubmissionViewer co the render.
     try {
       final archive = ZipDecoder().decodeBytes(await file.readAsBytes());
       final documentFile = archive.findFile('word/document.xml');
@@ -37,6 +39,8 @@ class DocxDocumentParser {
   final _sections = <SectionBlock>[];
 
   GradingGuide parse(XmlDocument document) {
+    // Duyet tung phan tu trong body DOCX:
+    // p -> paragraph/heading/bullet, tbl -> rubric table.
     for (final child in document.body.children.whereType<XmlElement>()) {
       switch (child.name.local) {
         case 'p':
@@ -50,6 +54,8 @@ class DocxDocumentParser {
   }
 
   void _paragraph(XmlElement paragraph) {
+    // Xu ly 1 paragraph: neu la heading thi tao section,
+    // neu co numbering thi gom vao bullet list, con lai la paragraph thuong.
     final text = paragraph.textContent.trim();
     if (text.isEmpty) return;
 
@@ -83,6 +89,8 @@ class DocxDocumentParser {
   }
 
   void _section(String text, int level, String? styleId) {
+    // Tao cay section theo level heading. Heading level cao hon se nam trong
+    // section cha, heading cung/cao hon se dong section cu.
     while (_sections.isNotEmpty && _sections.last.heading.level >= level) {
       _sections.removeLast();
     }
@@ -95,6 +103,7 @@ class DocxDocumentParser {
   }
 
   RubricTableBlock _table(XmlElement table) {
+    // Chuyen bang trong DOCX thanh RubricTableBlock de UI render thanh table.
     final firstRowIsHeader =
         table.child('tblPr')?.child('tblLook')?.attr('firstRow') == '1';
     final rows = table.children

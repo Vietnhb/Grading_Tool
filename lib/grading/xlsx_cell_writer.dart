@@ -14,6 +14,8 @@ class XlsxCellWriter {
   final String _sheetXmlPath;
 
   List<int> patch(List<XlsxCellWrite> writes) {
+    // Patch truc tiep XML trong file XLSX. File nao la worksheet dang cham
+    // thi sua cell, cac file khac copy nguyen.
     final sourceArchive = ZipDecoder().decodeBytes(_bytes);
     final targetArchive = Archive();
 
@@ -38,6 +40,7 @@ class XlsxCellWriter {
   }
 
   List<int> _patchedSheet(ArchiveFile file, List<XlsxCellWrite> writes) {
+    // Parse XML cua sheet va giao cho _WorksheetPatcher sua tung cell.
     final document = XmlDocument.parse(utf8.decode(file.content as List<int>));
     _WorksheetPatcher(document).patch(writes);
     return utf8.encode(document.toXmlString());
@@ -51,6 +54,7 @@ class XlsxCellWriter {
   }
 
   List<int> _workbookWithRecalculation(ArchiveFile file) {
+    // Bat Excel tinh lai cong thuc khi user mo workbook sau khi app da ghi diem.
     final document = XmlDocument.parse(utf8.decode(file.content as List<int>));
     final workbook = document.findAllElements('workbook').first;
     final calcPrElements = document.findAllElements('calcPr');
@@ -69,6 +73,7 @@ class XlsxCellWriter {
   }
 
   static String _sheetPath(List<int> bytes, String sheetName) {
+    // Tim duong dan XML cua sheet theo ten sheet trong workbook relationships.
     final archive = ZipDecoder().decodeBytes(bytes);
     final workbookFile = archive.findFile('xl/workbook.xml');
     final relationsFile = archive.findFile('xl/_rels/workbook.xml.rels');
@@ -145,6 +150,7 @@ class _WorksheetPatcher {
   final XmlDocument document;
 
   void patch(List<XlsxCellWrite> writes) {
+    // Sap xep writes theo row/column roi ghi lan luot vao sheetData.
     final sheetDataElements = document.findAllElements('sheetData');
     if (sheetDataElements.isEmpty) {
       throw const AppException('Could not find worksheet data.');
@@ -178,6 +184,7 @@ class _WorksheetPatcher {
   }
 
   XmlElement _cell(XmlElement row, XlsxCellWrite write) {
+    // Tim cell co san. Neu cell chua ton tai thi tao cell moi dung vi tri cot.
     final reference = _reference(write.columnIndex, write.rowIndex);
     for (final cell in row.findElements('c').toList()) {
       final columnIndex = _columnIndex(cell.getAttribute('r'));
@@ -204,6 +211,8 @@ class _WorksheetPatcher {
   }
 
   void _setValue(XmlElement cell, XlsxCellWrite write) {
+    // Ghi gia tri vao XML cell: text dung inlineStr, number dung <v>.
+    // Neu value rong thi xoa noi dung cell.
     cell.children.clear();
     cell.attributes.removeWhere((attribute) => attribute.name.local == 't');
 
