@@ -262,6 +262,7 @@ class _GradingArea extends ConsumerWidget {
       isDirty: state.isDirty,
       isSaving: state.isSaving,
       showMarker: state.selectedMarker.isNotEmpty,
+      maxScores: state.gradingGuide.maxScores,
       onScoreChanged: controller.updateScore,
       onCommentChanged: controller.updateComment,
       onAutoSaveChanged: controller.setAutoSave,

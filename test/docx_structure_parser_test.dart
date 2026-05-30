@@ -37,8 +37,8 @@ void main() {
         <w:tc><w:p><w:r><w:t>Points</w:t></w:r></w:p></w:tc>
       </w:tr>
       <w:tr>
-        <w:tc><w:p><w:r><w:t>Project charter</w:t></w:r></w:p></w:tc>
-        <w:tc><w:p><w:r><w:t>20</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Question 1: Project charter</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>20 points</w:t></w:r></w:p></w:tc>
       </w:tr>
     </w:tbl>
     <w:p>
@@ -76,7 +76,9 @@ void main() {
     final table = rubric.children[2] as RubricTableBlock;
     expect(table.rows.first.isHeader, isTrue);
     expect(table.rows.first.cells, ['Criterion', 'Points']);
-    expect(table.rows.last.cells, ['Project charter', '20']);
+    expect(table.rows.last.cells, ['Question 1: Project charter', '20 points']);
+
+    expect(guide.maxScores, {0: 20});
 
     final details = rubric.children[3] as SectionBlock;
     expect(details.heading.level, 2);

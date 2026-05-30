@@ -39,11 +39,14 @@ class GradingEntry {
 }
 
 class GradingGuide {
-  const GradingGuide(this.blocks);
+  const GradingGuide(this.blocks, {this.maxScores = const {}});
 
-  const GradingGuide.empty() : blocks = const [];
+  const GradingGuide.empty()
+      : blocks = const [],
+        maxScores = const {};
 
   final List<DocumentBlock> blocks;
+  final Map<int, int> maxScores;
 }
 
 sealed class DocumentBlock {

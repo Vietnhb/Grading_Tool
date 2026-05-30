@@ -14,6 +14,7 @@ class GradingPanel extends StatefulWidget {
     required this.onAutoSaveChanged,
     required this.onSave,
     this.showMarker = true,
+    this.maxScores = const {},
     super.key,
   });
 
@@ -22,6 +23,7 @@ class GradingPanel extends StatefulWidget {
   final bool isDirty;
   final bool isSaving;
   final bool showMarker;
+  final Map<int, int> maxScores;
   final void Function(int questionIndex, int? score) onScoreChanged;
   final ValueChanged<String> onCommentChanged;
   final ValueChanged<bool> onAutoSaveChanged;
@@ -131,6 +133,7 @@ class _GradingPanelState extends State<GradingPanel> {
                         decoration: InputDecoration(
                           isDense: true,
                           labelText: 'Question ${index + 1}',
+                          errorText: _hasScoreError(index) ? 'Max: ${widget.maxScores[index]}' : null,
                         ),
                         onChanged: (value) => widget.onScoreChanged(
                           index,
@@ -175,7 +178,7 @@ class _GradingPanelState extends State<GradingPanel> {
           SizedBox(
             height: 44,
             child: FilledButton.icon(
-              onPressed: widget.isSaving || !widget.isDirty
+              onPressed: widget.isSaving || !widget.isDirty || _hasAnyError()
                   ? null
                   : widget.onSave,
               icon: widget.isSaving
@@ -216,5 +219,18 @@ class _GradingPanelState extends State<GradingPanel> {
     return entry.requestScores
         .map((score) => TextEditingController(text: score?.toString() ?? ''))
         .toList();
+  }
+
+  bool _hasScoreError(int index) {
+    final score = widget.entry.requestScores[index];
+    final maxScore = widget.maxScores[index];
+    return score != null && maxScore != null && score > maxScore;
+  }
+
+  bool _hasAnyError() {
+    for (var i = 0; i < widget.entry.requestScores.length; i++) {
+      if (_hasScoreError(i)) return true;
+    }
+    return false;
   }
 }
