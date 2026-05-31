@@ -45,6 +45,11 @@ class AiSettings {
   };
 }
 
+bool isValidOpenRouterApiKey(String? apiKey) {
+  final value = apiKey?.trim() ?? '';
+  return value.startsWith('sk-or-v1-') && value.length > 'sk-or-v1-'.length;
+}
+
 class AiApiKeyStore {
   const AiApiKeyStore();
 

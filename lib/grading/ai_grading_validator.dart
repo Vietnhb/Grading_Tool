@@ -23,6 +23,7 @@ class AiGradingValidator {
     required AiGradingResult result,
     required List<AiRubricCriterion> rubric,
     required int questionCount,
+    required String submissionContent,
   }) {
     final errors = <String>[];
     final warnings = <String>[];
@@ -57,6 +58,15 @@ class AiGradingValidator {
       }
     }
 
+    final totalScore = questionTotals.fold(0, (sum, score) => sum + score);
+    if (errors.isEmpty &&
+        totalScore == 0 &&
+        _hasSubstantialAnswer(submissionContent)) {
+      errors.add(
+        'AI returned all zero scores for a non-empty submission. Review or rerun before accepting.',
+      );
+    }
+
     return AiValidationResult(
       accepted: errors.isEmpty,
       questionScores: questionTotals.map<int?>((score) => score).toList(),
@@ -64,5 +74,16 @@ class AiGradingValidator {
       errors: errors,
       warnings: warnings,
     );
+  }
+
+  bool _hasSubstantialAnswer(String content) {
+    final normalized = content.trim();
+    if (normalized.length < 200) {
+      return false;
+    }
+    return RegExp(
+      r'\b(request|question|risk|cost|budget|project|raci)\b',
+      caseSensitive: false,
+    ).hasMatch(normalized);
   }
 }

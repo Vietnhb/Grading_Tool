@@ -38,15 +38,60 @@ class GradingEntry {
   }
 }
 
+class AiGradeSuggestion {
+  const AiGradeSuggestion({
+    required this.questionScores,
+    required this.criterionScores,
+    required this.comments,
+    this.warnings = const [],
+  });
+
+  final List<int?> questionScores;
+  final Map<String, int?> criterionScores;
+  final Map<String, String> comments;
+  final List<String> warnings;
+
+  int get total => questionScores.fold(0, (sum, score) => sum + (score ?? 0));
+
+  String get combinedComment {
+    final lines = <String>[
+      for (final entry in comments.entries)
+        if (entry.value.trim().isNotEmpty) '${entry.key}: ${entry.value.trim()}',
+      if (warnings.isNotEmpty) '',
+      if (warnings.isNotEmpty) 'AI audit warnings:',
+      for (final warning in warnings) '- $warning',
+    ];
+    return lines.join('\n');
+  }
+}
+
 class GradingGuide {
-  const GradingGuide(this.blocks, {this.maxScores = const {}});
+  const GradingGuide(
+    this.blocks, {
+    this.maxScores = const {},
+    this.questions = const [],
+  });
 
   const GradingGuide.empty()
       : blocks = const [],
-        maxScores = const {};
+        maxScores = const {},
+        questions = const [];
 
   final List<DocumentBlock> blocks;
   final Map<int, int> maxScores;
+  final List<ExamQuestion> questions;
+}
+
+class ExamQuestion {
+  const ExamQuestion({
+    required this.number,
+    required this.title,
+    required this.content,
+  });
+
+  final int number;
+  final String title;
+  final String content;
 }
 
 sealed class DocumentBlock {

@@ -13,11 +13,13 @@ class GradingPanel extends StatefulWidget {
     required this.isAiGrading,
     required this.rubricCriteria,
     required this.criterionScores,
+    required this.aiSuggestion,
     required this.onScoreChanged,
     required this.onCriterionScoreChanged,
     required this.onCommentChanged,
     required this.onAutoSaveChanged,
     required this.onAiSuggest,
+    required this.onApplyAiSuggestion,
     required this.onSave,
     this.showMarker = true,
     this.maxScores = const {},
@@ -31,6 +33,7 @@ class GradingPanel extends StatefulWidget {
   final bool isAiGrading;
   final List<AiRubricCriterion> rubricCriteria;
   final Map<String, int?> criterionScores;
+  final AiGradeSuggestion? aiSuggestion;
   final bool showMarker;
   final Map<int, int> maxScores;
   final void Function(int questionIndex, int? score) onScoreChanged;
@@ -38,16 +41,20 @@ class GradingPanel extends StatefulWidget {
   final ValueChanged<String> onCommentChanged;
   final ValueChanged<bool> onAutoSaveChanged;
   final VoidCallback onAiSuggest;
+  final VoidCallback onApplyAiSuggestion;
   final VoidCallback onSave;
 
   @override
   State<GradingPanel> createState() => _GradingPanelState();
 }
 
+enum _GradingPanelMode { summary, teacher, ai }
+
 class _GradingPanelState extends State<GradingPanel> {
   late List<TextEditingController> _scoreControllers;
   late Map<String, TextEditingController> _criterionControllers;
   late final TextEditingController _commentController;
+  _GradingPanelMode _mode = _GradingPanelMode.summary;
 
   @override
   void initState() {
@@ -71,6 +78,13 @@ class _GradingPanelState extends State<GradingPanel> {
 
     if (oldWidget.entry.alias != widget.entry.alias) {
       _syncControllers();
+    }
+    if (oldWidget.entry.requestScores != widget.entry.requestScores) {
+      _syncScoreControllers();
+    }
+    if (oldWidget.entry.comment != widget.entry.comment &&
+        _commentController.text != widget.entry.comment) {
+      _commentController.text = widget.entry.comment;
     }
     if (oldWidget.criterionScores != widget.criterionScores ||
         oldWidget.rubricCriteria.length != widget.rubricCriteria.length) {
@@ -179,153 +193,53 @@ class _GradingPanelState extends State<GradingPanel> {
                     const SizedBox(height: 24),
                   ] else
                     const SizedBox(height: 12),
-                  if (widget.rubricCriteria.isEmpty)
-                    _QuestionScoreFields(
-                      controllers: _scoreControllers,
-                      entry: widget.entry,
-                      maxScores: widget.maxScores,
-                      onScoreChanged: widget.onScoreChanged,
-                    )
-                  else
-                    _CriterionScoreFields(
-                      criteria: widget.rubricCriteria,
-                      criterionScores: widget.criterionScores,
-                      questionScores: widget.entry.requestScores,
-                      controllers: _criterionControllers,
-                      onCriterionScoreChanged: widget.onCriterionScoreChanged,
-                    ),
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE8F3F1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        const Text(
-                          'Total Score',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E4C4C),
-                            fontSize: 15,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          widget.entry.total.toString(),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                            color: Color(0xFF1E4C4C),
-                          ),
-                        ),
-                      ],
-                    ),
+                  _GradingModeTabs(
+                    selected: _mode,
+                    onChanged: (mode) => setState(() => _mode = mode),
                   ),
                   const SizedBox(height: 14),
-                  TextField(
-                    controller: _commentController,
-                    minLines: 4,
-                    maxLines: 8,
-                    style: const TextStyle(fontSize: 14),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: const Color(0xFFFAFCFC),
-                      hintText: 'Add a comment...',
-                      hintStyle: const TextStyle(
-                        color: Color(0xFFA0A7A7),
-                        fontSize: 14,
-                      ),
-                      contentPadding: const EdgeInsets.all(14),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFFE0E5E5)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF2E7D7D),
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                    onChanged: widget.onCommentChanged,
-                  ),
+                  _selectedModeView(),
                   const SizedBox(height: 8),
                 ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: widget.isAiGrading ? null : widget.onAiSuggest,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF2B73C2),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-              icon: widget.isAiGrading
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.auto_awesome_rounded, size: 20),
-              label: Text(
-                widget.isAiGrading ? 'AI grading...' : 'AI Suggest',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: widget.isSaving || !widget.isDirty || _hasAnyError()
-                  ? null
-                  : widget.onSave,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF1E4C4C),
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: const Color(0xFFE0E5E5),
-                disabledForegroundColor: const Color(0xFF98A2A2),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-              icon: widget.isSaving
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_rounded, size: 20),
-              label: Text(
-                widget.isDirty ? 'Save Changes' : 'Saved',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                ),
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _selectedModeView() {
+    return switch (_mode) {
+      _GradingPanelMode.summary => _SummarySection(
+        teacherTotal: widget.entry.total,
+        aiTotal: widget.aiSuggestion?.total,
+        isDirty: widget.isDirty,
+      ),
+      _GradingPanelMode.teacher => _TeacherGradingSection(
+        entry: widget.entry,
+        rubricCriteria: widget.rubricCriteria,
+        criterionScores: widget.criterionScores,
+        maxScores: widget.maxScores,
+        scoreControllers: _scoreControllers,
+        criterionControllers: _criterionControllers,
+        commentController: _commentController,
+        onScoreChanged: widget.onScoreChanged,
+        onCriterionScoreChanged: widget.onCriterionScoreChanged,
+        onCommentChanged: widget.onCommentChanged,
+        isSaving: widget.isSaving,
+        isDirty: widget.isDirty,
+        hasAnyError: _hasAnyError(),
+        onSave: widget.onSave,
+      ),
+      _GradingPanelMode.ai => _AiGradingSection(
+        suggestion: widget.aiSuggestion,
+        criteria: widget.rubricCriteria,
+        isAiGrading: widget.isAiGrading,
+        onAiSuggest: widget.onAiSuggest,
+        onApply: widget.onApplyAiSuggestion,
+      ),
+    };
   }
 
   bool _questionCountChanged(GradingPanel oldWidget) {
@@ -348,12 +262,16 @@ class _GradingPanelState extends State<GradingPanel> {
   }
 
   void _syncControllers() {
+    _syncScoreControllers();
+    _syncCriterionControllers();
+    _commentController.text = widget.entry.comment;
+  }
+
+  void _syncScoreControllers() {
     for (var index = 0; index < _scoreControllers.length; index += 1) {
       _scoreControllers[index].text =
           widget.entry.requestScores[index]?.toString() ?? '';
     }
-    _syncCriterionControllers();
-    _commentController.text = widget.entry.comment;
   }
 
   void _syncCriterionControllers() {
@@ -397,6 +315,536 @@ class _GradingPanelState extends State<GradingPanel> {
       if (_hasScoreError(i)) return true;
     }
     return false;
+  }
+}
+
+class _GradingModeTabs extends StatelessWidget {
+  const _GradingModeTabs({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final _GradingPanelMode selected;
+  final ValueChanged<_GradingPanelMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F5F5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          _ModeButton(
+            label: 'Tổng hợp',
+            icon: Icons.summarize_rounded,
+            selected: selected == _GradingPanelMode.summary,
+            onPressed: () => onChanged(_GradingPanelMode.summary),
+          ),
+          _ModeButton(
+            label: 'Giáo viên',
+            icon: Icons.edit_note_rounded,
+            selected: selected == _GradingPanelMode.teacher,
+            onPressed: () => onChanged(_GradingPanelMode.teacher),
+          ),
+          _ModeButton(
+            label: 'AI chấm',
+            icon: Icons.auto_awesome_rounded,
+            selected: selected == _GradingPanelMode.ai,
+            onPressed: () => onChanged(_GradingPanelMode.ai),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModeButton extends StatelessWidget {
+  const _ModeButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: TextButton.icon(
+          onPressed: onPressed,
+          style: TextButton.styleFrom(
+            foregroundColor: selected
+                ? const Color(0xFF1E4C4C)
+                : const Color(0xFF6B7272),
+            backgroundColor: selected ? Colors.white : Colors.transparent,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          icon: Icon(icon, size: 16),
+          label: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TeacherGradingSection extends StatelessWidget {
+  const _TeacherGradingSection({
+    required this.entry,
+    required this.rubricCriteria,
+    required this.criterionScores,
+    required this.maxScores,
+    required this.scoreControllers,
+    required this.criterionControllers,
+    required this.commentController,
+    required this.onScoreChanged,
+    required this.onCriterionScoreChanged,
+    required this.onCommentChanged,
+    required this.isSaving,
+    required this.isDirty,
+    required this.hasAnyError,
+    required this.onSave,
+  });
+
+  final GradingEntry entry;
+  final List<AiRubricCriterion> rubricCriteria;
+  final Map<String, int?> criterionScores;
+  final Map<int, int> maxScores;
+  final List<TextEditingController> scoreControllers;
+  final Map<String, TextEditingController> criterionControllers;
+  final TextEditingController commentController;
+  final void Function(int questionIndex, int? score) onScoreChanged;
+  final void Function(String criterionId, int? score) onCriterionScoreChanged;
+  final ValueChanged<String> onCommentChanged;
+  final bool isSaving;
+  final bool isDirty;
+  final bool hasAnyError;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (rubricCriteria.isEmpty)
+          _QuestionScoreFields(
+            controllers: scoreControllers,
+            entry: entry,
+            maxScores: maxScores,
+            onScoreChanged: onScoreChanged,
+          )
+        else
+          _CriterionScoreFields(
+            criteria: rubricCriteria,
+            criterionScores: criterionScores,
+            questionScores: entry.requestScores,
+            controllers: criterionControllers,
+            onCriterionScoreChanged: onCriterionScoreChanged,
+          ),
+        const SizedBox(height: 12),
+        _TotalRow(
+          label: 'Teacher Total',
+          value: entry.total.toString(),
+          color: const Color(0xFFE8F3F1),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: commentController,
+          minLines: 4,
+          maxLines: 8,
+          style: const TextStyle(fontSize: 14),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFFAFCFC),
+            hintText: 'Add a teacher comment...',
+            hintStyle: const TextStyle(
+              color: Color(0xFFA0A7A7),
+              fontSize: 14,
+            ),
+            contentPadding: const EdgeInsets.all(14),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Color(0xFFE0E5E5)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: Color(0xFF2E7D7D),
+                width: 1.5,
+              ),
+            ),
+          ),
+          onChanged: onCommentChanged,
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 48,
+          child: FilledButton.icon(
+            onPressed: isSaving || !isDirty || hasAnyError ? null : onSave,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF1E4C4C),
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: const Color(0xFFE0E5E5),
+              disabledForegroundColor: const Color(0xFF98A2A2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
+            icon: isSaving
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_rounded, size: 20),
+            label: Text(
+              isDirty ? 'Save teacher grade' : 'Teacher grade saved',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AiGradingSection extends StatelessWidget {
+  const _AiGradingSection({
+    required this.suggestion,
+    required this.criteria,
+    required this.isAiGrading,
+    required this.onAiSuggest,
+    required this.onApply,
+  });
+
+  final AiGradeSuggestion? suggestion;
+  final List<AiRubricCriterion> criteria;
+  final bool isAiGrading;
+  final VoidCallback onAiSuggest;
+  final VoidCallback onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentSuggestion = suggestion;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 42,
+          child: FilledButton.icon(
+            onPressed: isAiGrading ? null : onAiSuggest,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2B73C2),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
+            ),
+            icon: isAiGrading
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.auto_awesome_rounded, size: 18),
+            label: Text(isAiGrading ? 'AI grading...' : 'Run AI grading'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (currentSuggestion == null)
+          const Text(
+            'No AI suggestion for this alias yet.',
+            style: TextStyle(color: Color(0xFF6B7272), fontSize: 13),
+          )
+        else ...[
+          _TotalRow(
+            label: 'AI Total',
+            value: currentSuggestion.total.toString(),
+            color: const Color(0xFFEAF2FB),
+          ),
+          const SizedBox(height: 10),
+          _AiRequestScores(
+            criteria: criteria,
+            suggestion: currentSuggestion,
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onApply,
+            icon: const Icon(Icons.call_merge_rounded, size: 18),
+            label: const Text('Apply to teacher grade'),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _AiRequestScores extends StatelessWidget {
+  const _AiRequestScores({
+    required this.criteria,
+    required this.suggestion,
+  });
+
+  final List<AiRubricCriterion> criteria;
+  final AiGradeSuggestion suggestion;
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = <int, List<AiRubricCriterion>>{};
+    for (final criterion in criteria) {
+      groups.putIfAbsent(criterion.questionIndex, () => []).add(criterion);
+    }
+    final sortedGroups = groups.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final group in sortedGroups) _AiRequestCard(group: group),
+      ],
+    );
+  }
+
+  Widget _AiRequestCard({required MapEntry<int, List<AiRubricCriterion>> group}) {
+    final requestComment = _requestComment(group.value);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFCFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE0E5E5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Request ${group.key + 1}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF2E7D7D),
+                  ),
+                ),
+              ),
+              Text(
+                '${_groupScore(group.value)} / ${_groupMax(group.value)}',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1E4C4C),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final criterion in group.value) _AiCriterionComment(criterion),
+          if (requestComment.isNotEmpty) ...[
+            const Divider(height: 14, color: Color(0xFFE0E5E5)),
+            SelectableText(
+              requestComment,
+              style: const TextStyle(
+                color: Color(0xFF4A5252),
+                fontSize: 12,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _AiCriterionComment(AiRubricCriterion criterion) {
+    final comment = _commentFor(criterion);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${criterion.id} ${criterion.title}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF4A5252),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${suggestion.criterionScores[criterion.id] ?? 0}/${criterion.maxScore}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF1E4C4C),
+                ),
+              ),
+            ],
+          ),
+          if (comment.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: SelectableText(
+                comment,
+                style: const TextStyle(
+                  color: Color(0xFF6B7272),
+                  fontSize: 12,
+                  height: 1.3,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  int _groupScore(List<AiRubricCriterion> criteria) {
+    return criteria.fold(
+      0,
+      (sum, criterion) => sum + (suggestion.criterionScores[criterion.id] ?? 0),
+    );
+  }
+
+  int _groupMax(List<AiRubricCriterion> criteria) {
+    return criteria.fold(0, (sum, criterion) => sum + criterion.maxScore);
+  }
+
+  String _commentFor(AiRubricCriterion criterion) {
+    return suggestion.comments[criterion.id]?.trim() ?? '';
+  }
+
+  String _requestComment(List<AiRubricCriterion> criteria) {
+    return [
+      for (final criterion in criteria)
+        if (_commentFor(criterion).isNotEmpty)
+          '${criterion.id}: ${_commentFor(criterion)}',
+    ].join('\n');
+  }
+}
+
+class _SummarySection extends StatelessWidget {
+  const _SummarySection({
+    required this.teacherTotal,
+    required this.aiTotal,
+    required this.isDirty,
+  });
+
+  final int teacherTotal;
+  final int? aiTotal;
+  final bool isDirty;
+
+  @override
+  Widget build(BuildContext context) {
+    final difference = aiTotal == null ? null : teacherTotal - aiTotal!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TotalRow(
+          label: 'Teacher Total',
+          value: teacherTotal.toString(),
+          color: const Color(0xFFE8F3F1),
+        ),
+        const SizedBox(height: 8),
+        _TotalRow(
+          label: 'AI Total',
+          value: aiTotal?.toString() ?? 'Not run',
+          color: const Color(0xFFEAF2FB),
+        ),
+        const SizedBox(height: 8),
+        _TotalRow(
+          label: 'Teacher - AI',
+          value: difference == null
+              ? 'N/A'
+              : difference > 0
+              ? '+$difference'
+              : difference.toString(),
+          color: const Color(0xFFF6F7F7),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          isDirty ? 'Teacher grade has unsaved changes.' : 'Teacher grade is saved.',
+          style: const TextStyle(
+            color: Color(0xFF6B7272),
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TotalRow extends StatelessWidget {
+  const _TotalRow({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1E4C4C),
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              color: Color(0xFF1E4C4C),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

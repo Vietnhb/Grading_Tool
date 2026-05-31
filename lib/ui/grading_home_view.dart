@@ -176,6 +176,7 @@ class _StatusArea extends ConsumerWidget {
     final state = ref.watch(gradingControllerProvider);
     return TopStatusBar(
       currentIndex: state.currentIndex,
+      currentAlias: state.currentSubmission?.alias ?? '',
       gradedCount: state.gradedCount,
       totalStudents: state.totalStudents,
       markerOptions: state.markerOptions,
@@ -194,6 +195,7 @@ class _StatusArea extends ConsumerWidget {
       onLast: () => onMove(
         () => controller.goToIndex(state.visibleSubmissions.length - 1),
       ),
+      onAliasSubmitted: (alias) => onMove(() => controller.goToAlias(alias)),
     );
   }
 
@@ -231,11 +233,19 @@ class _StatusArea extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
-                    if (state.openRouterApiKeyConfigured)
+                    if (state.openRouterApiKeyInvalid)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          'Saved key is invalid. Paste an OpenRouter key that starts with sk-or-v1-.',
+                          style: TextStyle(color: Color(0xFFB42318)),
+                        ),
+                      )
+                    else if (state.openRouterApiKeyConfigured)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Text(
-                          'Current key: ${state.openRouterApiKeyPreview}',
+                          'Saved key: ${state.openRouterApiKeyPreview}',
                         ),
                       ),
                     TextField(
@@ -243,6 +253,9 @@ class _StatusArea extends ConsumerWidget {
                       obscureText: obscure,
                       decoration: InputDecoration(
                         labelText: 'OpenRouter API key',
+                        helperText: state.openRouterApiKeyConfigured
+                            ? 'Leave blank to keep the saved key.'
+                            : 'Paste a key from OpenRouter.',
                         hintText: state.openRouterApiKeyConfigured
                             ? 'Paste a new key to replace current key'
                             : 'sk-or-v1-...',
@@ -284,11 +297,11 @@ class _StatusArea extends ConsumerWidget {
                 ),
                 FilledButton(
                   onPressed: () async {
-                    await controller.saveAiSettings(
+                    final saved = await controller.saveAiSettings(
                       openRouterApiKey: openRouterKeyController.text.trim(),
                       openRouterModel: openRouterModelController.text.trim(),
                     );
-                    if (context.mounted) {
+                    if (saved && context.mounted) {
                       Navigator.of(context).pop();
                     }
                   },
@@ -306,6 +319,9 @@ class _StatusArea extends ConsumerWidget {
   }
 
   String _aiProviderStatus(GradingState state) {
+    if (state.openRouterApiKeyInvalid) {
+      return 'OpenRouter key is invalid';
+    }
     return state.openRouterApiKeyConfigured
         ? 'OpenRouter: ${state.openRouterModel} (${state.openRouterApiKeyPreview})'
         : 'Set OpenRouter API key';
@@ -367,6 +383,7 @@ class _GradingArea extends ConsumerWidget {
       isAiGrading: state.isAiGrading,
       rubricCriteria: state.rubricCriteria,
       criterionScores: state.currentCriterionScores,
+      aiSuggestion: state.currentAiSuggestion,
       showMarker: state.selectedMarker.isNotEmpty,
       maxScores: state.gradingGuide.maxScores,
       onScoreChanged: controller.updateScore,
@@ -374,6 +391,7 @@ class _GradingArea extends ConsumerWidget {
       onCommentChanged: controller.updateComment,
       onAutoSaveChanged: controller.setAutoSave,
       onAiSuggest: controller.suggestAiGrade,
+      onApplyAiSuggestion: controller.applyAiSuggestionToTeacherGrade,
       onSave: controller.saveCurrent,
     );
   }

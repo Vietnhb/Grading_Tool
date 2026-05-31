@@ -12,6 +12,7 @@ import 'ai_grading_service.dart';
 import 'ai_grading_validator.dart';
 import 'grading_models.dart';
 import '../document/docx_parser.dart';
+import '../document/question_ocr_reader.dart';
 import 'excel_grade_repository.dart';
 import '../submission/package_detector.dart';
 import '../submission/submission_parser.dart';
@@ -26,6 +27,7 @@ class GradingState {
     this.submissions = const [],
     this.entries = const {},
     this.criterionScores = const {},
+    this.aiSuggestions = const {},
     this.markerOptions = const [],
     this.selectedMarker = '',
     this.gradingGuide = const GradingGuide.empty(),
@@ -36,9 +38,11 @@ class GradingState {
     this.isSaving = false,
     this.isAiGrading = false,
     this.openRouterApiKeyConfigured = false,
+    this.openRouterApiKeyInvalid = false,
     this.openRouterApiKeyPreview = '',
     this.openRouterModel = 'openai/gpt-oss-120b:free',
     this.packageContext = '',
+    this.questionImageText = '',
     this.autoSave = true,
     this.isDirty = false,
     this.errorMessage,
@@ -49,6 +53,7 @@ class GradingState {
   final List<File> submissions;
   final Map<String, GradingEntry> entries;
   final Map<String, Map<String, int?>> criterionScores;
+  final Map<String, AiGradeSuggestion> aiSuggestions;
   final List<String> markerOptions;
   final String selectedMarker;
   final GradingGuide gradingGuide;
@@ -59,9 +64,11 @@ class GradingState {
   final bool isSaving;
   final bool isAiGrading;
   final bool openRouterApiKeyConfigured;
+  final bool openRouterApiKeyInvalid;
   final String openRouterApiKeyPreview;
   final String openRouterModel;
   final String packageContext;
+  final String questionImageText;
   final bool autoSave;
   final bool isDirty;
   final String? errorMessage;
@@ -73,6 +80,10 @@ class GradingState {
   Map<String, int?> get currentCriterionScores => currentSubmission == null
       ? const {}
       : criterionScores[currentSubmission!.alias] ?? const {};
+
+  AiGradeSuggestion? get currentAiSuggestion => currentSubmission == null
+      ? null
+      : aiSuggestions[currentSubmission!.alias];
 
   List<File> get visibleSubmissions {
     if (selectedMarker.isEmpty) {
@@ -95,13 +106,18 @@ class GradingState {
   int get totalStudents => visibleSubmissions.length;
   bool get hasPackage => package != null;
   bool get aiReady => openRouterApiKeyConfigured;
-  String get aiReadyLabel => aiReady ? 'AI: OpenRouter' : 'OpenRouter Key';
+  String get aiReadyLabel => openRouterApiKeyInvalid
+      ? 'Invalid Key'
+      : aiReady
+      ? 'AI: OpenRouter'
+      : 'OpenRouter Key';
 
   GradingState copyWith({
     ExamPackage? package,
     List<File>? submissions,
     Map<String, GradingEntry>? entries,
     Map<String, Map<String, int?>>? criterionScores,
+    Map<String, AiGradeSuggestion>? aiSuggestions,
     List<String>? markerOptions,
     String? selectedMarker,
     GradingGuide? gradingGuide,
@@ -113,9 +129,11 @@ class GradingState {
     bool? isSaving,
     bool? isAiGrading,
     bool? openRouterApiKeyConfigured,
+    bool? openRouterApiKeyInvalid,
     String? openRouterApiKeyPreview,
     String? openRouterModel,
     String? packageContext,
+    String? questionImageText,
     bool? autoSave,
     bool? isDirty,
     String? errorMessage,
@@ -127,6 +145,7 @@ class GradingState {
       submissions: submissions ?? this.submissions,
       entries: entries ?? this.entries,
       criterionScores: criterionScores ?? this.criterionScores,
+      aiSuggestions: aiSuggestions ?? this.aiSuggestions,
       markerOptions: markerOptions ?? this.markerOptions,
       selectedMarker: selectedMarker ?? this.selectedMarker,
       gradingGuide: gradingGuide ?? this.gradingGuide,
@@ -140,10 +159,13 @@ class GradingState {
       isAiGrading: isAiGrading ?? this.isAiGrading,
       openRouterApiKeyConfigured:
           openRouterApiKeyConfigured ?? this.openRouterApiKeyConfigured,
+      openRouterApiKeyInvalid:
+          openRouterApiKeyInvalid ?? this.openRouterApiKeyInvalid,
       openRouterApiKeyPreview:
           openRouterApiKeyPreview ?? this.openRouterApiKeyPreview,
       openRouterModel: openRouterModel ?? this.openRouterModel,
       packageContext: packageContext ?? this.packageContext,
+      questionImageText: questionImageText ?? this.questionImageText,
       autoSave: autoSave ?? this.autoSave,
       isDirty: isDirty ?? this.isDirty,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
@@ -156,6 +178,7 @@ class GradingController extends Notifier<GradingState> {
   final PackageDetector _detector = PackageDetector();
   final SubmissionParser _parser = SubmissionParser();
   final DocxTextReader _docxTextReader = const DocxTextReader();
+  final QuestionOcrReader _questionOcrReader = const QuestionOcrReader();
   final ExcelGradeRepository _repository = ExcelGradeRepository();
   final AiRubricExtractor _rubricExtractor = const AiRubricExtractor();
   final OpenRouterGradingService _openRouterGradingService =
@@ -168,9 +191,21 @@ class GradingController extends Notifier<GradingState> {
   @override
   GradingState build() {
     final settings = _aiApiKeyStore.read();
+    if (settings.openRouterApiKey != null &&
+        !isValidOpenRouterApiKey(settings.openRouterApiKey)) {
+      return GradingState(
+        openRouterModel: settings.openRouterModel,
+        openRouterApiKeyInvalid: true,
+        errorMessage:
+            'Saved OpenRouter API key is invalid. Please replace it with a key that starts with sk-or-v1-.',
+        statusMessage: 'AI settings need attention.',
+      );
+    }
+
     _applyAiSettings(settings);
     return GradingState(
       openRouterApiKeyConfigured: _openRouterGradingService.hasApiKey,
+      openRouterApiKeyInvalid: false,
       openRouterApiKeyPreview: _openRouterGradingService.apiKeyPreview,
       openRouterModel: settings.openRouterModel,
     );
@@ -199,11 +234,15 @@ class GradingController extends Notifier<GradingState> {
       final markerOptions = _repository.markerOptions;
       // Doc huong dan cham tu DOCX de SubmissionViewer render o tab Grading Guide.
       final guide = await _readGradingGuide(examPackage);
+      final questionImageText = await _questionOcrReader.read(
+        examPackage.questionImageFile,
+      );
       final rubricCriteria = _rubricExtractor.extract(guide);
       final packageContext = _buildPackageContext(
         examPackage: examPackage,
         rubricCriteria: rubricCriteria,
         guide: guide,
+        questionImageText: questionImageText,
       );
       _logRubricCriteria(rubricCriteria);
       _lastSavedEntries = Map<String, GradingEntry>.from(entries);
@@ -211,11 +250,13 @@ class GradingController extends Notifier<GradingState> {
         package: examPackage,
         submissions: examPackage.studentFiles,
         entries: entries,
+        aiSuggestions: const {},
         markerOptions: markerOptions,
         selectedMarker: '',
         gradingGuide: guide,
         rubricCriteria: rubricCriteria,
         packageContext: packageContext,
+        questionImageText: questionImageText,
         currentIndex: 0,
         isDirty: false,
         statusMessage: 'Loaded ${examPackage.studentFiles.length} submissions.',
@@ -303,6 +344,36 @@ class GradingController extends Notifier<GradingState> {
   Future<bool> nextStudent() => goToIndex(state.currentIndex + 1);
   Future<bool> previousStudent() => goToIndex(state.currentIndex - 1);
 
+  Future<bool> goToAlias(String alias) async {
+    final normalizedAlias = alias.trim();
+    if (normalizedAlias.isEmpty) {
+      return true;
+    }
+    final visibleSubmissions = state.visibleSubmissions;
+    final targetIndex = visibleSubmissions.indexWhere(
+      (file) => _sameAlias(aliasFromFile(file), normalizedAlias),
+    );
+    if (targetIndex < 0) {
+      state = state.copyWith(
+        errorMessage: 'Alias $normalizedAlias was not found in the current list.',
+        statusMessage: 'Alias not found.',
+      );
+      return false;
+    }
+    return goToIndex(targetIndex);
+  }
+
+  bool _sameAlias(String left, String right) {
+    if (left == right) {
+      return true;
+    }
+    final leftNumber = int.tryParse(left);
+    final rightNumber = int.tryParse(right);
+    return leftNumber != null &&
+        rightNumber != null &&
+        leftNumber == rightNumber;
+  }
+
   Future<bool> selectMarker(String marker) async {
     // Doi bo loc marker. visibleSubmissions trong GradingState se tu filter
     // theo marker, sau do load lai bai dau tien cua danh sach moi.
@@ -320,25 +391,37 @@ class GradingController extends Notifier<GradingState> {
 
   void setAutoSave(bool enabled) => state = state.copyWith(autoSave: enabled);
 
-  Future<void> saveAiSettings({
+  Future<bool> saveAiSettings({
     required String openRouterApiKey,
     required String openRouterModel,
   }) async {
     final previous = _aiApiKeyStore.read();
+    final trimmedKey = openRouterApiKey.trim();
+    if (trimmedKey.isNotEmpty && !isValidOpenRouterApiKey(trimmedKey)) {
+      state = state.copyWith(
+        errorMessage:
+            'OpenRouter API key must start with sk-or-v1-. Please paste an OpenRouter key.',
+        openRouterApiKeyInvalid: true,
+        statusMessage: 'AI settings not saved.',
+      );
+      return false;
+    }
     final settings = AiSettings(
-      openRouterApiKey: openRouterApiKey.trim().isEmpty
+      openRouterApiKey: trimmedKey.isEmpty
           ? previous.openRouterApiKey
-          : openRouterApiKey.trim(),
+          : trimmedKey,
       openRouterModel: openRouterModel,
     );
     _applyAiSettings(settings);
     await _aiApiKeyStore.save(settings);
     state = state.copyWith(
       openRouterApiKeyConfigured: _openRouterGradingService.hasApiKey,
+      openRouterApiKeyInvalid: false,
       openRouterApiKeyPreview: _openRouterGradingService.apiKeyPreview,
       openRouterModel: settings.openRouterModel,
       statusMessage: 'AI settings saved.',
     );
+    return true;
   }
 
   Future<void> clearOpenRouterApiKey() async {
@@ -349,6 +432,7 @@ class GradingController extends Notifier<GradingState> {
     await _aiApiKeyStore.save(settings);
     state = state.copyWith(
       openRouterApiKeyConfigured: false,
+      openRouterApiKeyInvalid: false,
       openRouterApiKeyPreview: '',
       statusMessage: 'OpenRouter API key cleared.',
     );
@@ -435,6 +519,30 @@ class GradingController extends Notifier<GradingState> {
     _replaceEntry(entry.copyWith(comment: comment));
   }
 
+  void applyAiSuggestionToTeacherGrade() {
+    final entry = state.currentEntry;
+    final submission = state.currentSubmission;
+    final suggestion = state.currentAiSuggestion;
+    if (entry == null || submission == null || suggestion == null) {
+      return;
+    }
+
+    final allCriterionScores = Map<String, Map<String, int?>>.from(
+      state.criterionScores,
+    );
+    allCriterionScores[submission.alias] = Map<String, int?>.from(
+      suggestion.criterionScores,
+    );
+    state = state.copyWith(criterionScores: allCriterionScores);
+
+    _replaceEntry(
+      entry.copyWith(
+        requestScores: List<int?>.from(suggestion.questionScores),
+        comment: suggestion.combinedComment,
+      ),
+    );
+  }
+
   Future<void> suggestAiGrade() async {
     // AI chi de xuat diem. Diem chi duoc apply vao panel sau khi qua validator.
     final package = state.package;
@@ -472,6 +580,7 @@ class GradingController extends Notifier<GradingState> {
         result: aiResult,
         rubric: criteria,
         questionCount: entry.requestScores.length,
+        submissionContent: submission.content,
       );
 
       await _aiAuditLog.append(
@@ -491,7 +600,6 @@ class GradingController extends Notifier<GradingState> {
       }
 
       _applyAiResult(
-        entry: entry,
         submission: submission,
         result: aiResult,
         validation: validation,
@@ -611,49 +719,20 @@ class GradingController extends Notifier<GradingState> {
   String _activeModelName() => 'openrouter:${_openRouterGradingService.model}';
 
   void _applyAiResult({
-    required GradingEntry entry,
     required StudentSubmission submission,
     required AiGradingResult result,
     required AiValidationResult validation,
   }) {
-    final allCriterionScores = Map<String, Map<String, int?>>.from(
-      state.criterionScores,
+    final suggestions = Map<String, AiGradeSuggestion>.from(
+      state.aiSuggestions,
     );
-    final aliasScores = Map<String, int?>.from(state.currentCriterionScores);
-    for (final item in validation.criterionScores.entries) {
-      aliasScores[item.key] = item.value;
-    }
-    allCriterionScores[submission.alias] = aliasScores;
-    state = state.copyWith(criterionScores: allCriterionScores);
-
-    final comment = _commentWithWarnings(
-      _commentsForResult(result),
-      validation.warnings,
+    suggestions[submission.alias] = AiGradeSuggestion(
+      questionScores: validation.questionScores,
+      criterionScores: validation.criterionScores,
+      comments: result.comments,
+      warnings: validation.warnings,
     );
-    _replaceEntry(
-      entry.copyWith(
-        requestScores: validation.questionScores,
-        comment: comment,
-      ),
-    );
-  }
-
-  String _commentWithWarnings(String comment, List<String> warnings) {
-    if (warnings.isEmpty) {
-      return comment;
-    }
-    return [
-      comment,
-      '',
-      'AI audit warnings:',
-      for (final warning in warnings) '- $warning',
-    ].join('\n');
-  }
-
-  String _commentsForResult(AiGradingResult result) {
-    final entries = result.comments.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
-    return entries.map((entry) => '${entry.key}: ${entry.value}').join('\n');
+    state = state.copyWith(aiSuggestions: suggestions);
   }
 
   void _logRubricCriteria(List<AiRubricCriterion> criteria) {
@@ -681,17 +760,30 @@ class GradingController extends Notifier<GradingState> {
     required ExamPackage examPackage,
     required List<AiRubricCriterion> rubricCriteria,
     required GradingGuide guide,
+    required String questionImageText,
   }) {
     final buffer = StringBuffer();
     buffer.writeln(
       'packageAlias=${p.basenameWithoutExtension(examPackage.gradingGuideFile.path)}',
     );
     buffer.writeln(
-      'questionImage=${p.basename(examPackage.questionImageFile.path)}',
-    );
-    buffer.writeln(
       'gradingGuideFile=${p.basename(examPackage.gradingGuideFile.path)}',
     );
+    buffer.writeln(
+      'questionImageFile=${p.basename(examPackage.questionImageFile.path)}',
+    );
+    buffer.writeln('\n--- OCR QUESTION IMAGE TEXT ---');
+    buffer.writeln(questionImageText);
+    buffer.writeln('extractedQuestionCount=${guide.questions.length}');
+    if (guide.questions.isNotEmpty) {
+      buffer.writeln('\n--- EXAM QUESTIONS EXTRACTED FROM GRADING GUIDE ---');
+      for (final question in guide.questions) {
+        buffer.writeln('Question ${question.number}: ${question.title}');
+        if (question.content.isNotEmpty) {
+          buffer.writeln(question.content);
+        }
+      }
+    }
     buffer.writeln('rubricCount=${rubricCriteria.length}');
     buffer.writeln(
       '\n--- RUBRIC CHECKLIST (schema helper; full guide is authoritative) ---',

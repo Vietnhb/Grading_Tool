@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../submission/submission_models.dart';
+import 'ai_api_key_store.dart';
 import 'grading_models.dart';
 
 const _aiRequestTimeout = Duration(seconds: 90);
@@ -359,89 +360,56 @@ class OpenRouterGradingService {
   }
 
   Future<AiGradingResult> grade(AiGradingRequest request) async {
-    final apiKey = _apiKey;
-    if (apiKey == null || apiKey.trim().isEmpty) {
+    final apiKey = _apiKey?.trim();
+    if (apiKey == null || apiKey.isEmpty) {
       throw const AiGradingException(
         'OPENROUTER_API_KEY is not set. Add it in AI Settings before using OpenRouter.',
       );
     }
-    // Perform request and parse result. If OpenRouter returns a model endpoint
-    // not found error, attempt retrying with fallback models from
-    // OPENROUTER_MODEL_FALLBACKS (comma-separated) if provided.
-    Future<AiGradingResult> attempt(String currentModel) async {
-      // Temporarily set model for payload generation
-      final originalModel = model;
-      try {
-        model = currentModel;
-        final httpRequest = await _httpClient.postUrl(
-          Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
-        );
-        httpRequest.headers
-          ..contentType = ContentType.json
-          ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
-          ..set('HTTP-Referer', 'http://localhost/lecturer-grading-tool')
-          ..set('X-Title', 'Lecturer Grading Tool');
-        httpRequest.write(jsonEncode(_payloadFor(request)));
+    if (!isValidOpenRouterApiKey(apiKey)) {
+      throw const AiGradingException(
+        'OpenRouter API key must start with sk-or-v1-. Update it in AI Settings.',
+      );
+    }
+    final httpRequest = await _httpClient.postUrl(
+      Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+    );
+    httpRequest.headers
+      ..contentType = ContentType.json
+      ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
+      ..set('HTTP-Referer', 'http://localhost/lecturer-grading-tool')
+      ..set('X-Title', 'Lecturer Grading Tool');
+    httpRequest.write(jsonEncode(_payloadFor(request)));
 
-        final response = await httpRequest.close().timeout(_aiRequestTimeout);
-        final body = await utf8.decodeStream(response);
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw AiGradingException('OpenRouter request failed: $body');
-        }
-
-        final decoded = jsonDecode(body) as Map<String, Object?>;
-        final choices = decoded['choices'];
-        if (choices is! List || choices.isEmpty || choices.first is! Map) {
-          throw const AiGradingException(
-            'OpenRouter response did not contain choices.',
-          );
-        }
-        final message = (choices.first as Map)['message'];
-        if (message is! Map || message['content'] is! String) {
-          throw const AiGradingException(
-            'OpenRouter response did not contain content.',
-          );
-        }
-
-        final decodedJson = jsonDecode(
-          normalizeAiJsonResponse(message['content'] as String),
-        );
-        if (decodedJson is! Map<String, dynamic>) {
-          throw const AiGradingException(
-            'AI output is not a JSON object. No score was applied.',
-          );
-        }
-        return AiGradingResult.fromJson(decodedJson);
-      } finally {
-        model = originalModel;
-      }
+    final response = await httpRequest.close().timeout(_aiRequestTimeout);
+    final body = await utf8.decodeStream(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AiGradingException('OpenRouter request failed: $body');
     }
 
-    try {
-      return await attempt(model);
-    } on AiGradingException catch (e) {
-      final msg = e.message.toLowerCase();
-      if (msg.contains('no endpoints found') || msg.contains('404')) {
-        final fallbacks =
-            (Platform.environment['OPENROUTER_MODEL_FALLBACKS'] ?? '')
-                .split(',')
-                .map((s) => s.trim())
-                .where((s) => s.isNotEmpty)
-                .toList();
-        for (final fb in fallbacks) {
-          try {
-            stdout.writeln('Model $model unavailable — trying fallback $fb');
-            return await attempt(fb);
-          } catch (_) {
-            // continue to next fallback
-          }
-        }
-        throw AiGradingException(
-          'Model $model not available and no fallback succeeded. ${e.message}',
-        );
-      }
-      rethrow;
+    final decoded = jsonDecode(body) as Map<String, Object?>;
+    final choices = decoded['choices'];
+    if (choices is! List || choices.isEmpty || choices.first is! Map) {
+      throw const AiGradingException(
+        'OpenRouter response did not contain choices.',
+      );
     }
+    final message = (choices.first as Map)['message'];
+    if (message is! Map || message['content'] is! String) {
+      throw const AiGradingException(
+        'OpenRouter response did not contain content.',
+      );
+    }
+
+    final decodedJson = jsonDecode(
+      normalizeAiJsonResponse(message['content'] as String),
+    );
+    if (decodedJson is! Map<String, dynamic>) {
+      throw const AiGradingException(
+        'AI output is not a JSON object. No score was applied.',
+      );
+    }
+    return AiGradingResult.fromJson(decodedJson);
   }
 
   Map<String, Object?> _payloadFor(AiGradingRequest request) {
@@ -459,8 +427,13 @@ class OpenRouterGradingService {
               'The top-level JSON object must contain exactly these keys: scores, comments. '
               'Grade every rubric criterion exactly once. Scores must be integers and must not exceed maxScore. '
               'The full grading guide in packageContext is the authoritative grading source. '
+              'Use OCR question image text in packageContext as the exam paper text. '
+              'Use extracted exam questions in packageContext when they are present. '
               'Use expectedCriteria only as a checklist for required JSON keys and maxScore limits. '
               'If any checklist text conflicts with the full grading guide, follow the full grading guide. '
+              'Grade by semantic content, not exact wording. '
+              'Award partial credit for relevant but incomplete answers. '
+              'Do not give zero when the submission contains directly relevant evidence for that criterion. '
               'If the answer only matches partialCreditDescription, do not give full score.',
         },
         {
@@ -473,8 +446,14 @@ class OpenRouterGradingService {
               'scores must contain every rubric criterion id exactly once.',
               'comments must contain a short grading reason for every rubric criterion id.',
               'Read the full grading guide completely before scoring.',
+              'Read the OCR question image text completely before scoring.',
+              'Use the extracted exam questions together with the full grading guide when question text is present.',
               'Do not ignore global rules, notes, common mistakes, deductions, or exceptions in the full grading guide.',
               'Use expectedCriteria only to ensure every required score key is present.',
+              'Accept imperfect English, spelling mistakes, and grammar mistakes when the intended project-management content is clear.',
+              'Do not require the student to use the exact rubric wording or exact labels if the required idea is present.',
+              'For each criterion, first identify evidence from the submission, then decide score from full/partial/poor descriptions.',
+              'Give zero only when the criterion is missing, unrelated, or contradicts the exam scenario.',
               'If the submission satisfies fullCreditDescription, give maxScore.',
               'If the submission only satisfies partialCreditDescription, give a middle score.',
               'If the submission matches poorCreditDescription, give low score or zero.',

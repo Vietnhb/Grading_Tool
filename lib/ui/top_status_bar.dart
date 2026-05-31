@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class TopStatusBar extends StatelessWidget {
   const TopStatusBar({
     required this.currentIndex,
+    required this.currentAlias,
     required this.gradedCount,
     required this.totalStudents,
     required this.markerOptions,
@@ -18,10 +19,12 @@ class TopStatusBar extends StatelessWidget {
     required this.onPrevious,
     required this.onNext,
     required this.onLast,
+    required this.onAliasSubmitted,
     super.key,
   });
 
   final int currentIndex;
+  final String currentAlias;
   final int gradedCount;
   final int totalStudents;
   final List<String> markerOptions;
@@ -37,6 +40,7 @@ class TopStatusBar extends StatelessWidget {
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onLast;
+  final ValueChanged<String> onAliasSubmitted;
 
   @override
   Widget build(BuildContext context) {
@@ -80,16 +84,11 @@ class TopStatusBar extends StatelessWidget {
       children: [
         _buildIconButton(Icons.first_page_rounded, 'First Student', onFirst),
         _buildIconButton(Icons.chevron_left_rounded, 'Previous Student', onPrevious),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Text(
-            '${totalStudents == 0 ? 0 : currentIndex + 1} / $totalStudents',
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF1A1C1C),
-              fontSize: 14,
-            ),
-          ),
+        _AliasJumpField(
+          currentAlias: currentAlias,
+          totalStudents: totalStudents,
+          currentPosition: totalStudents == 0 ? 0 : currentIndex + 1,
+          onSubmitted: onAliasSubmitted,
         ),
         _buildIconButton(Icons.chevron_right_rounded, 'Next Student', onNext),
         _buildIconButton(Icons.last_page_rounded, 'Last Student', onLast),
@@ -220,6 +219,88 @@ class TopStatusBar extends StatelessWidget {
         iconSize: 20,
         color: const Color(0xFF4A5252),
         icon: Icon(icon),
+      ),
+    );
+  }
+}
+
+class _AliasJumpField extends StatefulWidget {
+  const _AliasJumpField({
+    required this.currentAlias,
+    required this.currentPosition,
+    required this.totalStudents,
+    required this.onSubmitted,
+  });
+
+  final String currentAlias;
+  final int currentPosition;
+  final int totalStudents;
+  final ValueChanged<String> onSubmitted;
+
+  @override
+  State<_AliasJumpField> createState() => _AliasJumpFieldState();
+}
+
+class _AliasJumpFieldState extends State<_AliasJumpField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.currentAlias);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AliasJumpField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentAlias != widget.currentAlias &&
+        _controller.text != widget.currentAlias) {
+      _controller.text = widget.currentAlias;
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 142,
+      height: 36,
+      child: TextField(
+        controller: _controller,
+        textAlign: TextAlign.center,
+        textInputAction: TextInputAction.go,
+        decoration: InputDecoration(
+          isDense: true,
+          labelText: 'Alias',
+          suffixText: widget.totalStudents == 0
+              ? null
+              : '${widget.currentPosition}/${widget.totalStudents}',
+          suffixStyle: const TextStyle(
+            color: Color(0xFF98A2A2),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+          floatingLabelBehavior: FloatingLabelBehavior.always,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 8,
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF1A1C1C),
+          fontSize: 14,
+        ),
+        onSubmitted: widget.onSubmitted,
       ),
     );
   }
