@@ -115,17 +115,28 @@ class _GradingPanelState extends State<GradingPanel> {
                           'Alias ${widget.entry.alias}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: const Color(0xFF1A1C1C)),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF1A1C1C),
+                              ),
                         ),
                       ),
-                      const Text('Auto save', style: TextStyle(fontSize: 12, color: Color(0xFF6B7272), fontWeight: FontWeight.w500)),
+                      const Text(
+                        'Auto save',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6B7272),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       const SizedBox(width: 4),
                       Transform.scale(
                         scale: 0.8,
                         child: Switch(
                           value: widget.autoSave,
                           onChanged: widget.onAutoSaveChanged,
-                          activeColor: const Color(0xFF2E7D7D),
+                          activeThumbColor: const Color(0xFF2E7D7D),
                         ),
                       ),
                     ],
@@ -133,20 +144,33 @@ class _GradingPanelState extends State<GradingPanel> {
                   const SizedBox(height: 8),
                   if (widget.showMarker) ...[
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF0F5F5),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.person_outline_rounded, size: 16, color: Color(0xFF6B7272)),
+                          const Icon(
+                            Icons.person_outline_rounded,
+                            size: 16,
+                            color: Color(0xFF6B7272),
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              widget.entry.marker.isEmpty ? 'Unassigned' : widget.entry.marker,
+                              widget.entry.marker.isEmpty
+                                  ? 'Unassigned'
+                                  : widget.entry.marker,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: Color(0xFF4A5252), fontSize: 13, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                color: Color(0xFF4A5252),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
@@ -172,18 +196,32 @@ class _GradingPanelState extends State<GradingPanel> {
                     ),
                   Container(
                     margin: const EdgeInsets.only(top: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE8F3F1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Row(
                       children: [
-                        const Text('Total Score', style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E4C4C), fontSize: 15)),
+                        const Text(
+                          'Total Score',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1E4C4C),
+                            fontSize: 15,
+                          ),
+                        ),
                         const Spacer(),
                         Text(
                           widget.entry.total.toString(),
-                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF1E4C4C)),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                            color: Color(0xFF1E4C4C),
+                          ),
                         ),
                       ],
                     ),
@@ -198,7 +236,10 @@ class _GradingPanelState extends State<GradingPanel> {
                       filled: true,
                       fillColor: const Color(0xFFFAFCFC),
                       hintText: 'Add a comment...',
-                      hintStyle: const TextStyle(color: Color(0xFFA0A7A7), fontSize: 14),
+                      hintStyle: const TextStyle(
+                        color: Color(0xFFA0A7A7),
+                        fontSize: 14,
+                      ),
                       contentPadding: const EdgeInsets.all(14),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -206,7 +247,10 @@ class _GradingPanelState extends State<GradingPanel> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: Color(0xFF2E7D7D), width: 1.5),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF2E7D7D),
+                          width: 1.5,
+                        ),
                       ),
                     ),
                     onChanged: widget.onCommentChanged,
@@ -224,16 +268,27 @@ class _GradingPanelState extends State<GradingPanel> {
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF2B73C2),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 0,
               ),
               icon: widget.isAiGrading
                   ? const SizedBox.square(
                       dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
                     )
                   : const Icon(Icons.auto_awesome_rounded, size: 20),
-              label: Text(widget.isAiGrading ? 'AI grading...' : 'AI Suggest', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+              label: Text(
+                widget.isAiGrading ? 'AI grading...' : 'AI Suggest',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -248,7 +303,9 @@ class _GradingPanelState extends State<GradingPanel> {
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: const Color(0xFFE0E5E5),
                 disabledForegroundColor: const Color(0xFF98A2A2),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 0,
               ),
               icon: widget.isSaving
@@ -257,7 +314,13 @@ class _GradingPanelState extends State<GradingPanel> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_rounded, size: 20),
-              label: Text(widget.isDirty ? 'Save Changes' : 'Saved', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+              label: Text(
+                widget.isDirty ? 'Save Changes' : 'Saved',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
+              ),
             ),
           ),
         ],
@@ -370,7 +433,9 @@ class _QuestionScoreFields extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 labelText: 'Question ${index + 1}',
-                errorText: _hasScoreError(index) ? 'Max: ${maxScores[index]}' : null,
+                errorText: _hasScoreError(index)
+                    ? 'Max: ${maxScores[index]}'
+                    : null,
               ),
               onChanged: (value) =>
                   onScoreChanged(index, int.tryParse(value.trim())),
@@ -418,21 +483,34 @@ class _CriterionScoreFields extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: const BoxDecoration(
                     color: Color(0xFFF0F5F5),
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(11)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(11),
+                    ),
                   ),
                   child: Row(
                     children: [
                       Text(
                         'Question ${group.key + 1}',
-                        style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF2E7D7D), fontSize: 13),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF2E7D7D),
+                          fontSize: 13,
+                        ),
                       ),
                       const Spacer(),
                       Text(
                         '${questionScores[group.key] ?? 0} / ${_maxFor(group.value)}',
-                        style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E4C4C), fontSize: 13),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1E4C4C),
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                   ),
@@ -454,7 +532,12 @@ class _CriterionScoreFields extends StatelessWidget {
                                     '${criterion.id} ${criterion.title}',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 13, color: Color(0xFF4A5252), height: 1.4, fontWeight: FontWeight.w500),
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF4A5252),
+                                      height: 1.4,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -465,22 +548,38 @@ class _CriterionScoreFields extends StatelessWidget {
                                   controller: controllers[criterion.id],
                                   keyboardType: TextInputType.number,
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: Color(0xFF1A1C1C)),
-                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                    color: Color(0xFF1A1C1C),
+                                  ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
                                   decoration: InputDecoration(
                                     isDense: true,
                                     filled: true,
                                     fillColor: Colors.white,
                                     hintText: '/${criterion.maxScore}',
-                                    hintStyle: const TextStyle(color: Color(0xFFB0B7B7)),
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                                    hintStyle: const TextStyle(
+                                      color: Color(0xFFB0B7B7),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                      horizontal: 8,
+                                    ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(color: Color(0xFFE0E5E5)),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFFE0E5E5),
+                                      ),
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: const BorderSide(color: Color(0xFF2E7D7D), width: 1.5),
+                                      borderSide: const BorderSide(
+                                        color: Color(0xFF2E7D7D),
+                                        width: 1.5,
+                                      ),
                                     ),
                                   ),
                                   onChanged: (value) => onCriterionScoreChanged(

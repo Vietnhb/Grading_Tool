@@ -355,9 +355,7 @@ class OpenRouterGradingService {
 
   void setModel(String model) {
     final trimmed = model.trim();
-    this.model = trimmed.isEmpty
-        ? 'openai/gpt-oss-120b:free'
-        : trimmed;
+    this.model = trimmed.isEmpty ? 'openai/gpt-oss-120b:free' : trimmed;
   }
 
   Future<AiGradingResult> grade(AiGradingRequest request) async {
@@ -370,7 +368,7 @@ class OpenRouterGradingService {
     // Perform request and parse result. If OpenRouter returns a model endpoint
     // not found error, attempt retrying with fallback models from
     // OPENROUTER_MODEL_FALLBACKS (comma-separated) if provided.
-    Future<AiGradingResult> _attempt(String currentModel) async {
+    Future<AiGradingResult> attempt(String currentModel) async {
       // Temporarily set model for payload generation
       final originalModel = model;
       try {
@@ -420,25 +418,27 @@ class OpenRouterGradingService {
     }
 
     try {
-      return await _attempt(model);
+      return await attempt(model);
     } on AiGradingException catch (e) {
       final msg = e.message.toLowerCase();
       if (msg.contains('no endpoints found') || msg.contains('404')) {
-        final fallbacks = (Platform.environment['OPENROUTER_MODEL_FALLBACKS'] ?? '')
-            .split(',')
-            .map((s) => s.trim())
-            .where((s) => s.isNotEmpty)
-            .toList();
+        final fallbacks =
+            (Platform.environment['OPENROUTER_MODEL_FALLBACKS'] ?? '')
+                .split(',')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList();
         for (final fb in fallbacks) {
           try {
-            stdout.writeln('Model ${model} unavailable — trying fallback $fb');
-            return await _attempt(fb);
+            stdout.writeln('Model $model unavailable — trying fallback $fb');
+            return await attempt(fb);
           } catch (_) {
             // continue to next fallback
           }
         }
         throw AiGradingException(
-            'Model ${model} not available and no fallback succeeded. ${e.message}');
+          'Model $model not available and no fallback succeeded. ${e.message}',
+        );
       }
       rethrow;
     }

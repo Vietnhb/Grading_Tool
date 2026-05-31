@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../grading/grading_controller.dart';
-import '../core/file_name_utils.dart';
 import 'drop_package_panel.dart';
 import 'grading_panel.dart';
 import 'submission_viewer.dart';
@@ -139,10 +138,7 @@ class _EmptyWorkspace extends ConsumerWidget {
 }
 
 class _LoadedWorkspace extends StatelessWidget {
-  const _LoadedWorkspace({
-    required this.controller,
-    required this.onMove,
-  });
+  const _LoadedWorkspace({required this.controller, required this.onMove});
 
   final GradingController controller;
   final Future<void> Function(Future<bool> Function() move) onMove;
@@ -195,7 +191,9 @@ class _StatusArea extends ConsumerWidget {
       onFirst: () => onMove(() => controller.goToIndex(0)),
       onPrevious: () => onMove(controller.previousStudent),
       onNext: () => onMove(controller.nextStudent),
-      onLast: () => onMove(() => controller.goToIndex(state.visibleSubmissions.length - 1)),
+      onLast: () => onMove(
+        () => controller.goToIndex(state.visibleSubmissions.length - 1),
+      ),
     );
   }
 
@@ -313,7 +311,6 @@ class _StatusArea extends ConsumerWidget {
         : 'Set OpenRouter API key';
   }
 }
-
 
 class _SubmissionArea extends ConsumerWidget {
   const _SubmissionArea();

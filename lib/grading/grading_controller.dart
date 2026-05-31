@@ -244,7 +244,8 @@ class GradingController extends Notifier<GradingState> {
       final maxScore = state.gradingGuide.maxScores[i];
       if (score != null && maxScore != null && score > maxScore) {
         state = state.copyWith(
-          errorMessage: 'Cannot save: Question ${i + 1} score exceeds maximum of $maxScore.',
+          errorMessage:
+              'Cannot save: Question ${i + 1} score exceeds maximum of $maxScore.',
           clearError: true,
         );
         return false;
@@ -699,13 +700,19 @@ class GradingController extends Notifier<GradingState> {
       switch (block) {
         case SectionBlock(:final heading, :final children):
           buffer.writeln(heading.text);
-          for (final child in children) appendBlock(child);
+          for (final child in children) {
+            appendBlock(child);
+          }
         case ParagraphBlock(:final text):
           buffer.writeln(text);
         case BulletListBlock(:final items):
-          for (final item in items) buffer.writeln('- ${item.text}');
+          for (final item in items) {
+            buffer.writeln('- ${item.text}');
+          }
         case RubricTableBlock(:final rows):
-          for (final row in rows) buffer.writeln(row.cells.join(' | '));
+          for (final row in rows) {
+            buffer.writeln(row.cells.join(' | '));
+          }
       }
     }
 
