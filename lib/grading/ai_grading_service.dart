@@ -388,21 +388,45 @@ class OpenRouterGradingService {
     }
 
     final decoded = jsonDecode(body) as Map<String, Object?>;
+    final error = decoded['error'];
+    if (error is Map) {
+      final message = error['message']?.toString() ?? error.toString();
+      throw AiGradingException('OpenRouter error: $message');
+    }
+
     final choices = decoded['choices'];
     if (choices is! List || choices.isEmpty || choices.first is! Map) {
       throw const AiGradingException(
         'OpenRouter response did not contain choices.',
       );
     }
-    final message = (choices.first as Map)['message'];
-    if (message is! Map || message['content'] is! String) {
+    final firstChoice = choices.first as Map;
+    final message = firstChoice['message'];
+    String? content;
+    if (message is Map && message['content'] is String) {
+      content = message['content'] as String;
+    }
+    if (content == null || content.trim().isEmpty) {
+      if (firstChoice['text'] is String) {
+        content = firstChoice['text'] as String;
+      } else if (message is Map && message['refusal'] != null) {
+        throw AiGradingException(
+          'OpenRouter refused response: ${message['refusal']}',
+        );
+      } else if (message is Map && message['tool_calls'] is List) {
+        throw const AiGradingException(
+          'OpenRouter returned tool calls without content. Choose a model that returns content.',
+        );
+      }
+    }
+    if (content == null || content.trim().isEmpty) {
       throw const AiGradingException(
         'OpenRouter response did not contain content.',
       );
     }
 
     final decodedJson = jsonDecode(
-      normalizeAiJsonResponse(message['content'] as String),
+      normalizeAiJsonResponse(content),
     );
     if (decodedJson is! Map<String, dynamic>) {
       throw const AiGradingException(
