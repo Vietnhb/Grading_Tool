@@ -8,6 +8,8 @@ import 'submission_models.dart';
 
 class PackageDetector {
   Future<ExamPackage> detect(String path) async {
+    // Kiem tra folder package dau vao. Ham nay chi tra ve ExamPackage
+    // khi folder co du: xlsx, docx, anh de va Student_Solutions/*.txt.
     final root = Directory(path);
     if (!await root.exists()) {
       throw const AppException('Please Select Exam package folder.');
@@ -24,6 +26,8 @@ class PackageDetector {
             solutions,
           )).where((file) => extensionOf(file) == '.txt').toList()
           ..sort((a, b) => compareAliases(aliasFromFile(a), aliasFromFile(b)));
+    // Sau khi co danh sach file .txt, controller se dung alias cua tung file
+    // de map voi dong tuong ung trong Excel.
     if (studentFiles.isEmpty) {
       throw const AppException('Student Solutions student empty.');
     }
@@ -64,6 +68,7 @@ class PackageDetector {
     String missing,
     String duplicated,
   ) {
+    // Tim dung 1 file khop dieu kien. Thieu hoac bi trung thi bao loi ro rang.
     final matches = files.where(test).toList();
     if (matches.isEmpty) throw AppException(missing);
     if (matches.length > 1) throw AppException(duplicated);

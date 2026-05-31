@@ -25,6 +25,8 @@ class _DropPackagePanelState extends State<DropPackagePanel> {
       onDragEntered: (_) => setState(() => _dragging = true),
       onDragExited: (_) => setState(() => _dragging = false),
       onDragDone: (details) {
+        // User tha folder/file vao app. Lay path dau tien va day len
+        // GradingHomeView -> GradingController.loadPackage(path).
         setState(() => _dragging = false);
         if (details.files.isNotEmpty) {
           widget.onPackageSelected(details.files.first.path);
@@ -73,6 +75,8 @@ class _DropPackagePanelState extends State<DropPackagePanel> {
   }
 
   Future<void> _pickFolder() async {
+    // User bam Select Folder. FilePicker tra ve path folder,
+    // flow tiep theo giong drag/drop: loadPackage(path).
     final path = await FilePicker.getDirectoryPath();
     if (path != null) {
       widget.onPackageSelected(path);

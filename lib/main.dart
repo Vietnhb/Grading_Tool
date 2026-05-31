@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'ui/grading_home_view.dart';
 
 void main() {
+  // Khoi dong Riverpod scope, sau do vao man hinh chinh GradingHomeView.
   runApp(const ProviderScope(child: GradingToolApp()));
 }
 
@@ -12,6 +13,8 @@ class GradingToolApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Cau hinh app/theme. Flow tiep theo: GradingHomeView se quyet dinh
+    // hien man chon package hay workspace cham diem.
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'PMG201c Grading Tool',

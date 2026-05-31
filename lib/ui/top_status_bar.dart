@@ -7,7 +7,11 @@ class TopStatusBar extends StatelessWidget {
     required this.markerOptions,
     required this.selectedMarker,
     required this.packagePath,
+    required this.aiReady,
+    required this.aiReadyLabel,
+    required this.aiProviderStatus,
     required this.onMarkerChanged,
+    required this.onAiSettings,
     required this.onOpenPackage,
     required this.onPrevious,
     required this.onNext,
@@ -19,7 +23,11 @@ class TopStatusBar extends StatelessWidget {
   final List<String> markerOptions;
   final String selectedMarker;
   final String packagePath;
+  final bool aiReady;
+  final String aiReadyLabel;
+  final String aiProviderStatus;
   final ValueChanged<String> onMarkerChanged;
+  final VoidCallback onAiSettings;
   final Future<void> Function() onOpenPackage;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
@@ -63,6 +71,15 @@ class TopStatusBar extends StatelessWidget {
             child: Tooltip(
               message: packagePath,
               child: Text(packagePath, overflow: TextOverflow.ellipsis),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: aiProviderStatus,
+            child: TextButton.icon(
+              onPressed: onAiSettings,
+              icon: Icon(aiReady ? Icons.check_circle : Icons.key, size: 18),
+              label: Text(aiReadyLabel),
             ),
           ),
           const SizedBox(width: 8),

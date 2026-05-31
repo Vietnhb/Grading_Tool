@@ -25,6 +25,9 @@ class ExcelGradeRepository {
     File file,
     List<String> aliases,
   ) async {
+    // Mo file Excel:
+    // 1) decode workbook, 2) tim layout cot, 3) map alias -> row,
+    // 4) doc diem/comment cho tung alias.
     _file = file;
     final bytes = await file.readAsBytes();
     _workbook = _decodeWorkbook(bytes);
@@ -42,6 +45,8 @@ class ExcelGradeRepository {
   }
 
   Future<void> saveEntry(GradingEntry entry) async {
+    // Luu 1 GradingEntry vao dung row Excel.
+    // Flow tiep theo: _writesFor -> XlsxCellWriter.patch -> _replaceWorkbookSafely.
     final sheet = _workbook[_layout.sheetName];
     final rowIndex = _rowForAlias(entry.alias);
     final writes = _writesFor(rowIndex, entry);
@@ -51,6 +56,8 @@ class ExcelGradeRepository {
   }
 
   List<XlsxCellWrite> _writesFor(int rowIndex, GradingEntry entry) {
+    // Bien GradingEntry thanh danh sach cell can ghi: Alias, Marker,
+    // tung Question score va Comment.
     final writes = <XlsxCellWrite>[
       XlsxCellWrite.text(rowIndex, _layout.aliasColumn, entry.alias),
     ];
@@ -75,6 +82,7 @@ class ExcelGradeRepository {
   }
 
   void _cacheEntry(Sheet sheet, int rowIndex, GradingEntry entry) {
+    // Cap nhat workbook trong memory de lan doc/luu tiep theo thay du lieu moi.
     _cacheText(sheet, rowIndex, _layout.aliasColumn, entry.alias);
 
     _cacheText(sheet, rowIndex, _layout.markerColumn, entry.marker);
@@ -94,6 +102,7 @@ class ExcelGradeRepository {
   }
 
   GradingEntry _readEntry(String alias) {
+    // Doc 1 dong Excel theo alias. Neu alias chua co trong Excel thi tao entry rong.
     final sheet = _workbook[_layout.sheetName];
     final rowIndex = _aliasRows[alias];
     if (rowIndex == null) {
@@ -113,6 +122,8 @@ class ExcelGradeRepository {
   }
 
   SheetLayout _detectLayout() {
+    // Tu dong tim sheet va cac cot can thiet trong 20 dong dau:
+    // Alias, Marker, Question 1..n, Comment.
     for (final sheetName in _workbook.tables.keys) {
       final sheet = _workbook[sheetName];
       final rows = sheet.rows;
@@ -227,6 +238,7 @@ class ExcelGradeRepository {
   }
 
   Map<String, int> _buildAliasRows(Sheet sheet) {
+    // Tao map alias -> rowIndex de luu diem dung dong sinh vien.
     final rows = <String, int>{};
     for (
       var rowIndex = _layout.headerRow + 1;
@@ -242,6 +254,7 @@ class ExcelGradeRepository {
   }
 
   Set<String> _readMarkers(Sheet sheet) {
+    // Doc danh sach marker da co trong Excel de hien dropdown filter.
     final markers = <String>{};
     for (
       var rowIndex = _layout.headerRow + 1;
@@ -308,6 +321,8 @@ class ExcelGradeRepository {
   }
 
   Future<void> _replaceWorkbookSafely(List<int> bytes) async {
+    // Ghi file an toan: ghi .tmp truoc, rename file cu sang .bak,
+    // roi thay bang file moi. Neu loi thi co gang restore backup.
     final tempFile = File('${_file.path}.tmp');
     final backupFile = File('${_file.path}.bak');
     try {
