@@ -425,9 +425,7 @@ class OpenRouterGradingService {
       );
     }
 
-    final decodedJson = jsonDecode(
-      normalizeAiJsonResponse(content),
-    );
+    final decodedJson = jsonDecode(normalizeAiJsonResponse(content));
     if (decodedJson is! Map<String, dynamic>) {
       throw const AiGradingException(
         'AI output is not a JSON object. No score was applied.',
