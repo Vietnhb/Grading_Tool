@@ -458,7 +458,7 @@ class OpenRouterGradingService {
               'Do not return multiple JSON objects. Do not add trailing commas. '
               'The top-level JSON object must contain exactly these keys: scores, comments. '
               'Grade every rubric criterion exactly once. Scores must be integers and must not exceed maxScore. '
-              'Use the cached package context and rubric to decide each score. '
+              'Use packageContext rubric lines to decide each score. '
               'If the answer only matches partialCreditDescription, do not give full score.',
         },
         {
@@ -470,7 +470,7 @@ class OpenRouterGradingService {
               'Return one valid JSON object only.',
               'scores must contain every rubric criterion id exactly once.',
               'comments must contain a short grading reason for every rubric criterion id.',
-              'The rubric and question context are already cached in packageContext.',
+              'Use the compact rubric in packageContext as the grading source.',
               'If the submission satisfies fullCreditDescription, give maxScore.',
               'If the submission only satisfies partialCreditDescription, give a middle score.',
               'If the submission matches poorCreditDescription, give low score or zero.',

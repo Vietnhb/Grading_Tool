@@ -203,7 +203,6 @@ class GradingController extends Notifier<GradingState> {
       final packageContext = _buildPackageContext(
         examPackage: examPackage,
         rubricCriteria: rubricCriteria,
-        guide: guide,
       );
       _logRubricCriteria(rubricCriteria);
       _lastSavedEntries = Map<String, GradingEntry>.from(entries);
@@ -680,9 +679,11 @@ class GradingController extends Notifier<GradingState> {
   String _buildPackageContext({
     required ExamPackage examPackage,
     required List<AiRubricCriterion> rubricCriteria,
-    required GradingGuide guide,
   }) {
     final buffer = StringBuffer();
+    buffer.writeln(
+      'packageAlias=${p.basenameWithoutExtension(examPackage.gradingGuideFile.path)}',
+    );
     buffer.writeln(
       'questionImage=${p.basename(examPackage.questionImageFile.path)}',
     );
@@ -693,31 +694,6 @@ class GradingController extends Notifier<GradingState> {
     buffer.writeln('\n--- RUBRIC (compact lines) ---');
     for (final criterion in rubricCriteria) {
       buffer.writeln(criterion.toCompactPromptLine());
-    }
-    buffer.writeln('\n--- FULL GRADING GUIDE (do not summarize) ---');
-    // Render full guide text so AI sees original guide content verbatim.
-    void appendBlock(DocumentBlock block) {
-      switch (block) {
-        case SectionBlock(:final heading, :final children):
-          buffer.writeln(heading.text);
-          for (final child in children) {
-            appendBlock(child);
-          }
-        case ParagraphBlock(:final text):
-          buffer.writeln(text);
-        case BulletListBlock(:final items):
-          for (final item in items) {
-            buffer.writeln('- ${item.text}');
-          }
-        case RubricTableBlock(:final rows):
-          for (final row in rows) {
-            buffer.writeln(row.cells.join(' | '));
-          }
-      }
-    }
-
-    for (final block in guide.blocks) {
-      appendBlock(block);
     }
 
     return buffer.toString();
