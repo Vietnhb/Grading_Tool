@@ -401,6 +401,7 @@ class _GradingArea extends ConsumerWidget {
       rubricCriteria: state.rubricCriteria,
       criterionScores: state.currentCriterionScores,
       showMarker: state.selectedMarker.isNotEmpty,
+      maxScores: state.gradingGuide.maxScores,
       onScoreChanged: controller.updateScore,
       onCriterionScoreChanged: controller.updateCriterionScore,
       onCommentChanged: controller.updateComment,

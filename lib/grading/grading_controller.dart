@@ -238,6 +238,19 @@ class GradingController extends Notifier<GradingState> {
     if (entry == null) {
       return true;
     }
+
+    for (var i = 0; i < entry.requestScores.length; i++) {
+      final score = entry.requestScores[i];
+      final maxScore = state.gradingGuide.maxScores[i];
+      if (score != null && maxScore != null && score > maxScore) {
+        state = state.copyWith(
+          errorMessage: 'Cannot save: Question ${i + 1} score exceeds maximum of $maxScore.',
+          clearError: true,
+        );
+        return false;
+      }
+    }
+
     state = state.copyWith(
       isSaving: true,
       clearError: true,

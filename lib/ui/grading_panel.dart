@@ -20,6 +20,7 @@ class GradingPanel extends StatefulWidget {
     required this.onAiSuggest,
     required this.onSave,
     this.showMarker = true,
+    this.maxScores = const {},
     super.key,
   });
 
@@ -31,6 +32,7 @@ class GradingPanel extends StatefulWidget {
   final List<AiRubricCriterion> rubricCriteria;
   final Map<String, int?> criterionScores;
   final bool showMarker;
+  final Map<int, int> maxScores;
   final void Function(int questionIndex, int? score) onScoreChanged;
   final void Function(String criterionId, int? score) onCriterionScoreChanged;
   final ValueChanged<String> onCommentChanged;
@@ -142,6 +144,7 @@ class _GradingPanelState extends State<GradingPanel> {
                     _QuestionScoreFields(
                       controllers: _scoreControllers,
                       entry: widget.entry,
+                      maxScores: widget.maxScores,
                       onScoreChanged: widget.onScoreChanged,
                     )
                   else
@@ -204,7 +207,7 @@ class _GradingPanelState extends State<GradingPanel> {
           SizedBox(
             height: 44,
             child: FilledButton.icon(
-              onPressed: widget.isSaving || !widget.isDirty
+              onPressed: widget.isSaving || !widget.isDirty || _hasAnyError()
                   ? null
                   : widget.onSave,
               icon: widget.isSaving
@@ -278,17 +281,28 @@ class _GradingPanelState extends State<GradingPanel> {
         ),
     };
   }
+
+  bool _hasAnyError() {
+    for (var i = 0; i < widget.entry.requestScores.length; i++) {
+      if (_isOverMax(widget.entry.requestScores[i], widget.maxScores[i])) {
+        return true;
+      }
+    }
+    return false;
+  }
 }
 
 class _QuestionScoreFields extends StatelessWidget {
   const _QuestionScoreFields({
     required this.controllers,
     required this.entry,
+    required this.maxScores,
     required this.onScoreChanged,
   });
 
   final List<TextEditingController> controllers;
   final GradingEntry entry;
+  final Map<int, int> maxScores;
   final void Function(int questionIndex, int? score) onScoreChanged;
 
   @override
@@ -305,6 +319,10 @@ class _QuestionScoreFields extends StatelessWidget {
               decoration: InputDecoration(
                 isDense: true,
                 labelText: 'Question ${index + 1}',
+                errorText:
+                    _isOverMax(entry.requestScores[index], maxScores[index])
+                        ? 'Max: ${maxScores[index]}'
+                        : null,
               ),
               onChanged: (value) =>
                   onScoreChanged(index, int.tryParse(value.trim())),
@@ -416,4 +434,11 @@ class _CriterionScoreFields extends StatelessWidget {
 
   int _maxFor(List<AiRubricCriterion> criteria) =>
       criteria.fold(0, (sum, criterion) => sum + criterion.maxScore);
+}
+
+bool _isOverMax(int? score, int? maxScore) {
+  if (maxScore == null || score == null) {
+    return false;
+  }
+  return score > maxScore;
 }
