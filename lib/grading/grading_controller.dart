@@ -684,18 +684,23 @@ class GradingController extends Notifier<GradingState> {
   }) {
     final buffer = StringBuffer();
     buffer.writeln(
+      'packageAlias=${p.basenameWithoutExtension(examPackage.gradingGuideFile.path)}',
+    );
+    buffer.writeln(
       'questionImage=${p.basename(examPackage.questionImageFile.path)}',
     );
     buffer.writeln(
       'gradingGuideFile=${p.basename(examPackage.gradingGuideFile.path)}',
     );
     buffer.writeln('rubricCount=${rubricCriteria.length}');
-    buffer.writeln('\n--- RUBRIC (compact lines) ---');
+    buffer.writeln(
+      '\n--- RUBRIC CHECKLIST (schema helper; full guide is authoritative) ---',
+    );
     for (final criterion in rubricCriteria) {
       buffer.writeln(criterion.toCompactPromptLine());
     }
     buffer.writeln('\n--- FULL GRADING GUIDE (do not summarize) ---');
-    // Render full guide text so AI sees original guide content verbatim.
+    // Keep the original guide text in the prompt for maximum grading fidelity.
     void appendBlock(DocumentBlock block) {
       switch (block) {
         case SectionBlock(:final heading, :final children):

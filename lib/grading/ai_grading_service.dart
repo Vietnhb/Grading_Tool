@@ -458,7 +458,9 @@ class OpenRouterGradingService {
               'Do not return multiple JSON objects. Do not add trailing commas. '
               'The top-level JSON object must contain exactly these keys: scores, comments. '
               'Grade every rubric criterion exactly once. Scores must be integers and must not exceed maxScore. '
-              'Use the cached package context and rubric to decide each score. '
+              'The full grading guide in packageContext is the authoritative grading source. '
+              'Use expectedCriteria only as a checklist for required JSON keys and maxScore limits. '
+              'If any checklist text conflicts with the full grading guide, follow the full grading guide. '
               'If the answer only matches partialCreditDescription, do not give full score.',
         },
         {
@@ -470,11 +472,22 @@ class OpenRouterGradingService {
               'Return one valid JSON object only.',
               'scores must contain every rubric criterion id exactly once.',
               'comments must contain a short grading reason for every rubric criterion id.',
-              'The rubric and question context are already cached in packageContext.',
+              'Read the full grading guide completely before scoring.',
+              'Do not ignore global rules, notes, common mistakes, deductions, or exceptions in the full grading guide.',
+              'Use expectedCriteria only to ensure every required score key is present.',
               'If the submission satisfies fullCreditDescription, give maxScore.',
               'If the submission only satisfies partialCreditDescription, give a middle score.',
               'If the submission matches poorCreditDescription, give low score or zero.',
               'Never give maxScore for an answer that only satisfies partialCreditDescription.',
+            ],
+            'expectedCriteria': [
+              for (final criterion in request.criteria)
+                {
+                  'id': criterion.id,
+                  'title': criterion.title,
+                  'maxScore': criterion.maxScore,
+                  'questionIndex': criterion.questionIndex,
+                },
             ],
             'packageContext': request.packageContext,
             'submission': {
