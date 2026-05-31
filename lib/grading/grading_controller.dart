@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../core/app_exception.dart';
 import '../submission/submission_models.dart';
@@ -36,7 +37,8 @@ class GradingState {
     this.isAiGrading = false,
     this.openRouterApiKeyConfigured = false,
     this.openRouterApiKeyPreview = '',
-    this.openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free',
+    this.openRouterModel = 'openai/gpt-oss-120b:free',
+    this.packageContext = '',
     this.autoSave = true,
     this.isDirty = false,
     this.errorMessage,
@@ -59,6 +61,7 @@ class GradingState {
   final bool openRouterApiKeyConfigured;
   final String openRouterApiKeyPreview;
   final String openRouterModel;
+  final String packageContext;
   final bool autoSave;
   final bool isDirty;
   final String? errorMessage;
@@ -112,6 +115,7 @@ class GradingState {
     bool? openRouterApiKeyConfigured,
     String? openRouterApiKeyPreview,
     String? openRouterModel,
+    String? packageContext,
     bool? autoSave,
     bool? isDirty,
     String? errorMessage,
@@ -139,6 +143,7 @@ class GradingState {
       openRouterApiKeyPreview:
           openRouterApiKeyPreview ?? this.openRouterApiKeyPreview,
       openRouterModel: openRouterModel ?? this.openRouterModel,
+      packageContext: packageContext ?? this.packageContext,
       autoSave: autoSave ?? this.autoSave,
       isDirty: isDirty ?? this.isDirty,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
@@ -195,6 +200,11 @@ class GradingController extends Notifier<GradingState> {
       // Doc huong dan cham tu DOCX de SubmissionViewer render o tab Grading Guide.
       final guide = await _readGradingGuide(examPackage);
       final rubricCriteria = _rubricExtractor.extract(guide);
+      final packageContext = _buildPackageContext(
+        examPackage: examPackage,
+        rubricCriteria: rubricCriteria,
+        guide: guide,
+      );
       _logRubricCriteria(rubricCriteria);
       _lastSavedEntries = Map<String, GradingEntry>.from(entries);
       state = state.copyWith(
@@ -205,6 +215,7 @@ class GradingController extends Notifier<GradingState> {
         selectedMarker: '',
         gradingGuide: guide,
         rubricCriteria: rubricCriteria,
+        packageContext: packageContext,
         currentIndex: 0,
         isDirty: false,
         statusMessage: 'Loaded ${examPackage.studentFiles.length} submissions.',
@@ -439,6 +450,7 @@ class GradingController extends Notifier<GradingState> {
         submission: submission,
         criteria: criteria,
         questionCount: entry.requestScores.length,
+        packageContext: state.packageContext,
       );
       _openRouterGradingService.setModel(state.openRouterModel);
       aiResult = await _openRouterGradingService.grade(request);
@@ -649,5 +661,45 @@ class GradingController extends Notifier<GradingState> {
   Future<GradingGuide> _readGradingGuide(ExamPackage examPackage) {
     // Ham boc lai DocxTextReader de controller doc grading guide tu package.
     return _docxTextReader.read(examPackage.gradingGuideFile);
+  }
+
+  String _buildPackageContext({
+    required ExamPackage examPackage,
+    required List<AiRubricCriterion> rubricCriteria,
+    required GradingGuide guide,
+  }) {
+    final buffer = StringBuffer();
+    buffer.writeln(
+      'questionImage=${p.basename(examPackage.questionImageFile.path)}',
+    );
+    buffer.writeln(
+      'gradingGuideFile=${p.basename(examPackage.gradingGuideFile.path)}',
+    );
+    buffer.writeln('rubricCount=${rubricCriteria.length}');
+    buffer.writeln('\n--- RUBRIC (compact lines) ---');
+    for (final criterion in rubricCriteria) {
+      buffer.writeln(criterion.toCompactPromptLine());
+    }
+    buffer.writeln('\n--- FULL GRADING GUIDE (do not summarize) ---');
+    // Render full guide text so AI sees original guide content verbatim.
+    void appendBlock(DocumentBlock block) {
+      switch (block) {
+        case SectionBlock(:final heading, :final children):
+          buffer.writeln(heading.text);
+          for (final child in children) appendBlock(child);
+        case ParagraphBlock(:final text):
+          buffer.writeln(text);
+        case BulletListBlock(:final items):
+          for (final item in items) buffer.writeln('- ${item.text}');
+        case RubricTableBlock(:final rows):
+          for (final row in rows) buffer.writeln(row.cells.join(' | '));
+      }
+    }
+
+    for (final block in guide.blocks) {
+      appendBlock(block);
+    }
+
+    return buffer.toString();
   }
 }

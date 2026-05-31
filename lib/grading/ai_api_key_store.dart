@@ -4,7 +4,7 @@ import 'dart:io';
 class AiSettings {
   const AiSettings({
     this.openRouterApiKey,
-    this.openRouterModel = 'meta-llama/llama-3.1-8b-instruct:free',
+    this.openRouterModel = 'openai/gpt-oss-120b:free',
   });
 
   final String? openRouterApiKey;
@@ -27,11 +27,15 @@ class AiSettings {
   }
 
   factory AiSettings.fromJson(Map<Object?, Object?> json) {
+    final savedModel = json['openRouterModel'] as String?;
+    final shouldUseDefault =
+        savedModel == null ||
+        savedModel == 'meta-llama/llama-3.1-8b-instruct:free' ||
+        savedModel == 'openai/gpt-oss-20b:free';
+    final model = shouldUseDefault ? 'openai/gpt-oss-120b:free' : savedModel;
     return AiSettings(
       openRouterApiKey: json['openRouterApiKey'] as String?,
-      openRouterModel:
-          json['openRouterModel'] as String? ??
-          'meta-llama/llama-3.1-8b-instruct:free',
+      openRouterModel: model,
     );
   }
 

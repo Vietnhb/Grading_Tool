@@ -37,6 +37,28 @@ class AiRubricCriterion {
     'poorCreditDescription': poorCreditDescription,
     'commonMistakes': commonMistakes,
   };
+
+  String toCompactPromptLine() {
+    final buffer = StringBuffer()
+      ..write(id)
+      ..write(' | ')
+      ..write(title)
+      ..write(' | max ')
+      ..write(maxScore);
+    if (fullCreditDescription.isNotEmpty) {
+      buffer.write(' | full: $fullCreditDescription');
+    }
+    if (partialCreditDescription.isNotEmpty) {
+      buffer.write(' | partial: $partialCreditDescription');
+    }
+    if (poorCreditDescription.isNotEmpty) {
+      buffer.write(' | poor: $poorCreditDescription');
+    }
+    if (commonMistakes.isNotEmpty) {
+      buffer.write(' | mistakes: ${commonMistakes.join('; ')}');
+    }
+    return buffer.toString();
+  }
 }
 
 class AiGradingRequest {
@@ -44,11 +66,13 @@ class AiGradingRequest {
     required this.submission,
     required this.criteria,
     required this.questionCount,
+    required this.packageContext,
   });
 
   final StudentSubmission submission;
   final List<AiRubricCriterion> criteria;
   final int questionCount;
+  final String packageContext;
 }
 
 class AiGradingResult {
@@ -299,7 +323,7 @@ class OpenRouterGradingService {
   OpenRouterGradingService({
     HttpClient? httpClient,
     String? apiKey,
-    this.model = 'meta-llama/llama-3.1-8b-instruct:free',
+    this.model = 'openai/gpt-oss-120b:free',
   }) : _httpClient = httpClient ?? HttpClient(),
        _apiKey = apiKey ?? Platform.environment['OPENROUTER_API_KEY'];
 
@@ -323,7 +347,7 @@ class OpenRouterGradingService {
       _apiKey = trimmed;
     }
     this.model = model.trim().isEmpty
-        ? 'meta-llama/llama-3.1-8b-instruct:free'
+        ? 'openai/gpt-oss-120b:free'
         : model.trim();
   }
 
@@ -332,7 +356,7 @@ class OpenRouterGradingService {
   void setModel(String model) {
     final trimmed = model.trim();
     this.model = trimmed.isEmpty
-        ? 'meta-llama/llama-3.1-8b-instruct:free'
+        ? 'openai/gpt-oss-120b:free'
         : trimmed;
   }
 
@@ -343,54 +367,80 @@ class OpenRouterGradingService {
         'OPENROUTER_API_KEY is not set. Add it in AI Settings before using OpenRouter.',
       );
     }
-
-    final httpRequest = await _httpClient.postUrl(
-      Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
-    );
-    httpRequest.headers
-      ..contentType = ContentType.json
-      ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
-      ..set('HTTP-Referer', 'http://localhost/lecturer-grading-tool')
-      ..set('X-Title', 'Lecturer Grading Tool');
-    httpRequest.write(jsonEncode(_payloadFor(request)));
-
-    final response = await httpRequest.close().timeout(_aiRequestTimeout);
-    final body = await utf8.decodeStream(response);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AiGradingException('OpenRouter request failed: $body');
-    }
-
-    final decoded = jsonDecode(body) as Map<String, Object?>;
-    final choices = decoded['choices'];
-    if (choices is! List || choices.isEmpty || choices.first is! Map) {
-      throw const AiGradingException(
-        'OpenRouter response did not contain choices.',
-      );
-    }
-    final message = (choices.first as Map)['message'];
-    if (message is! Map || message['content'] is! String) {
-      throw const AiGradingException(
-        'OpenRouter response did not contain content.',
-      );
-    }
-    try {
-      final decoded = jsonDecode(
-        normalizeAiJsonResponse(message['content'] as String),
-      );
-      if (decoded is! Map<String, dynamic>) {
-        throw const AiGradingException(
-          'AI output is not a JSON object. No score was applied.',
+    // Perform request and parse result. If OpenRouter returns a model endpoint
+    // not found error, attempt retrying with fallback models from
+    // OPENROUTER_MODEL_FALLBACKS (comma-separated) if provided.
+    Future<AiGradingResult> _attempt(String currentModel) async {
+      // Temporarily set model for payload generation
+      final originalModel = model;
+      try {
+        model = currentModel;
+        final httpRequest = await _httpClient.postUrl(
+          Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
         );
+        httpRequest.headers
+          ..contentType = ContentType.json
+          ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
+          ..set('HTTP-Referer', 'http://localhost/lecturer-grading-tool')
+          ..set('X-Title', 'Lecturer Grading Tool');
+        httpRequest.write(jsonEncode(_payloadFor(request)));
+
+        final response = await httpRequest.close().timeout(_aiRequestTimeout);
+        final body = await utf8.decodeStream(response);
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw AiGradingException('OpenRouter request failed: $body');
+        }
+
+        final decoded = jsonDecode(body) as Map<String, Object?>;
+        final choices = decoded['choices'];
+        if (choices is! List || choices.isEmpty || choices.first is! Map) {
+          throw const AiGradingException(
+            'OpenRouter response did not contain choices.',
+          );
+        }
+        final message = (choices.first as Map)['message'];
+        if (message is! Map || message['content'] is! String) {
+          throw const AiGradingException(
+            'OpenRouter response did not contain content.',
+          );
+        }
+
+        final decodedJson = jsonDecode(
+          normalizeAiJsonResponse(message['content'] as String),
+        );
+        if (decodedJson is! Map<String, dynamic>) {
+          throw const AiGradingException(
+            'AI output is not a JSON object. No score was applied.',
+          );
+        }
+        return AiGradingResult.fromJson(decodedJson);
+      } finally {
+        model = originalModel;
       }
-      return AiGradingResult.fromJson(decoded);
-    } on FormatException {
-      throw const AiGradingException(
-        'AI returned invalid JSON. No score was applied. Please try again or choose another model.',
-      );
-    } on TypeError {
-      throw const AiGradingException(
-        'AI output JSON shape is invalid. No score was applied.',
-      );
+    }
+
+    try {
+      return await _attempt(model);
+    } on AiGradingException catch (e) {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('no endpoints found') || msg.contains('404')) {
+        final fallbacks = (Platform.environment['OPENROUTER_MODEL_FALLBACKS'] ?? '')
+            .split(',')
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+        for (final fb in fallbacks) {
+          try {
+            stdout.writeln('Model ${model} unavailable — trying fallback $fb');
+            return await _attempt(fb);
+          } catch (_) {
+            // continue to next fallback
+          }
+        }
+        throw AiGradingException(
+            'Model ${model} not available and no fallback succeeded. ${e.message}');
+      }
+      rethrow;
     }
   }
 
@@ -408,7 +458,7 @@ class OpenRouterGradingService {
               'Do not return multiple JSON objects. Do not add trailing commas. '
               'The top-level JSON object must contain exactly these keys: scores, comments. '
               'Grade every rubric criterion exactly once. Scores must be integers and must not exceed maxScore. '
-              'Use fullCreditDescription, partialCreditDescription, and poorCreditDescription to decide each score. '
+              'Use the cached package context and rubric to decide each score. '
               'If the answer only matches partialCreditDescription, do not give full score.',
         },
         {
@@ -420,16 +470,17 @@ class OpenRouterGradingService {
               'Return one valid JSON object only.',
               'scores must contain every rubric criterion id exactly once.',
               'comments must contain a short grading reason for every rubric criterion id.',
+              'The rubric and question context are already cached in packageContext.',
               'If the submission satisfies fullCreditDescription, give maxScore.',
               'If the submission only satisfies partialCreditDescription, give a middle score.',
               'If the submission matches poorCreditDescription, give low score or zero.',
               'Never give maxScore for an answer that only satisfies partialCreditDescription.',
             ],
+            'packageContext': request.packageContext,
             'submission': {
               'alias': request.submission.alias,
               'content': request.submission.content,
             },
-            'rubric': request.criteria.map((item) => item.toJson()).toList(),
             'questionCount': request.questionCount,
           }),
         },

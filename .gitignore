@@ -45,4 +45,6 @@ app.*.map.json
 /android/app/release
 
 examPakage
+.env.local
+tool
 

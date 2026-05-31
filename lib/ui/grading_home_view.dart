@@ -266,7 +266,7 @@ class _StatusArea extends ConsumerWidget {
                       controller: openRouterModelController,
                       decoration: const InputDecoration(
                         labelText: 'OpenRouter model',
-                        hintText: 'meta-llama/llama-3.1-8b-instruct:free',
+                        hintText: 'openai/gpt-oss-120b:free',
                       ),
                     ),
                   ],
