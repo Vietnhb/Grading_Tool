@@ -6,8 +6,6 @@ import 'ai_api_key_store.dart';
 import 'grading_models.dart';
 
 const _aiRequestTimeout = Duration(seconds: 90);
-const _aiMaxAttempts = 3;
-const _aiRetryDelay = Duration(seconds: 2);
 
 class AiRubricCriterion {
   const AiRubricCriterion({
@@ -374,42 +372,18 @@ class OpenRouterGradingService {
       );
     }
 
-    AiGradingException? lastRetryableError;
-    for (var attempt = 1; attempt <= _aiMaxAttempts; attempt += 1) {
-      try {
-        return await _gradeOnce(request, apiKey: apiKey, attempt: attempt);
-      } on FormatException catch (error) {
-        final wrapped = AiGradingException(
-          'AI did not return valid JSON. Retrying may fix this. Details: ${error.message}',
-        );
-        if (attempt == _aiMaxAttempts) {
-          throw wrapped;
-        }
-        lastRetryableError = wrapped;
-        await Future<void>.delayed(_aiRetryDelay);
-      } on AiGradingException catch (error) {
-        if (!_shouldRetryAiError(error) || attempt == _aiMaxAttempts) {
-          if (attempt > 1 && _shouldRetryAiError(error)) {
-            throw AiGradingException(
-              '${error.message} Tried $_aiMaxAttempts times. '
-              'This usually means the selected OpenRouter model returned an empty answer; try again or choose a more stable model.',
-            );
-          }
-          rethrow;
-        }
-        lastRetryableError = error;
-        await Future<void>.delayed(_aiRetryDelay);
-      }
+    try {
+      return await _gradeOnce(request, apiKey: apiKey);
+    } on FormatException catch (error) {
+      throw AiGradingException(
+        'AI did not return valid JSON. Details: ${error.message}',
+      );
     }
-
-    throw lastRetryableError ??
-        const AiGradingException('AI grading failed before receiving a result.');
   }
 
   Future<AiGradingResult> _gradeOnce(
     AiGradingRequest request, {
     required String apiKey,
-    required int attempt,
   }) async {
     final httpRequest = await _httpClient.postUrl(
       Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
@@ -419,12 +393,11 @@ class OpenRouterGradingService {
       ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
       ..set('HTTP-Referer', 'http://localhost/lecturer-grading-tool')
       ..set('X-Title', 'Lecturer Grading Tool');
-    final payload = _payloadFor(request, attempt: attempt);
+    final payload = _payloadFor(request);
     final payloadJson = jsonEncode(payload);
     // ignore: avoid_print
     print(
-      '--- OPENROUTER PAYLOAD attempt $attempt/$_aiMaxAttempts ---\n'
-      '$payloadJson\n--- END OPENROUTER PAYLOAD ---',
+      '--- OPENROUTER PAYLOAD ---\n$payloadJson\n--- END OPENROUTER PAYLOAD ---',
     );
     httpRequest.write(payloadJson);
 
@@ -432,8 +405,7 @@ class OpenRouterGradingService {
     final body = await utf8.decodeStream(response);
     // ignore: avoid_print
     print(
-      '--- OPENROUTER RESPONSE attempt $attempt/$_aiMaxAttempts ---\n'
-      '$body\n--- END OPENROUTER RESPONSE ---',
+      '--- OPENROUTER RESPONSE ---\n$body\n--- END OPENROUTER RESPONSE ---',
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiGradingException('OpenRouter request failed: $body');
@@ -478,8 +450,7 @@ class OpenRouterGradingService {
     if (content == null || content.trim().isEmpty) {
       throw AiGradingException(
         'OpenRouter response did not contain content. '
-        'finish_reason=${firstChoice['finish_reason']}; '
-        'attempt=$attempt/$_aiMaxAttempts',
+        'finish_reason=${firstChoice['finish_reason']}',
       );
     }
 
@@ -492,16 +463,7 @@ class OpenRouterGradingService {
     return AiGradingResult.fromJson(decodedJson);
   }
 
-  bool _shouldRetryAiError(AiGradingException error) {
-    final message = error.message.toLowerCase();
-    return message.contains('did not contain content') ||
-        message.contains('did not contain choices') ||
-        message.contains('did not return valid json') ||
-        message.contains('no json object found') ||
-        message.contains('ai output is not a json object');
-  }
-
-  Map<String, Object?> _payloadFor(AiGradingRequest request, {int attempt = 1}) {
+  Map<String, Object?> _payloadFor(AiGradingRequest request) {
     final messages = <Map<String, Object?>>[
       {
         'role': 'system',
@@ -568,20 +530,8 @@ class OpenRouterGradingService {
       },
     ];
 
-    if (attempt > 1) {
-      messages.add({
-        'role': 'user',
-        'content':
-            'The previous attempt returned empty or non-JSON content. '
-            'Now respond with exactly one valid JSON object only. '
-            'The comments values must be short Vietnamese grading reasons.',
-      });
-    }
-
     return {
       'model': model,
-      'response_format': {'type': 'json_object'},
-      'reasoning': {'exclude': true},
       'temperature': 0,
       'max_completion_tokens': 4096,
       'messages': messages,
