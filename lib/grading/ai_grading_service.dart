@@ -462,6 +462,7 @@ class OpenRouterGradingService {
               'Do not use Markdown. Do not wrap the JSON in code fences. '
               'Do not return multiple JSON objects. Do not add trailing commas. '
               'The top-level JSON object must contain exactly these keys: scores, comments. '
+              'Every value in comments must be written in Vietnamese. '
               'Grade every rubric criterion exactly once. Scores must be integers and must not exceed maxScore. '
               'The full grading guide in packageContext is the authoritative grading source. '
               'Use OCR question image text in packageContext as the exam paper text. '
@@ -482,6 +483,7 @@ class OpenRouterGradingService {
               'Return one valid JSON object only.',
               'scores must contain every rubric criterion id exactly once.',
               'comments must contain a short grading reason for every rubric criterion id.',
+              'Every comment value must be written in Vietnamese.',
               'Read the full grading guide completely before scoring.',
               'Read the OCR question image text completely before scoring.',
               'Use the extracted exam questions together with the full grading guide when question text is present.',
