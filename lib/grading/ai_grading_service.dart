@@ -6,6 +6,8 @@ import 'ai_api_key_store.dart';
 import 'grading_models.dart';
 
 const _aiRequestTimeout = Duration(seconds: 90);
+const _aiMaxAttempts = 3;
+const _aiRetryDelay = Duration(seconds: 2);
 
 class AiRubricCriterion {
   const AiRubricCriterion({
@@ -371,6 +373,44 @@ class OpenRouterGradingService {
         'OpenRouter API key must start with sk-or-v1-. Update it in AI Settings.',
       );
     }
+
+    AiGradingException? lastRetryableError;
+    for (var attempt = 1; attempt <= _aiMaxAttempts; attempt += 1) {
+      try {
+        return await _gradeOnce(request, apiKey: apiKey, attempt: attempt);
+      } on FormatException catch (error) {
+        final wrapped = AiGradingException(
+          'AI did not return valid JSON. Retrying may fix this. Details: ${error.message}',
+        );
+        if (attempt == _aiMaxAttempts) {
+          throw wrapped;
+        }
+        lastRetryableError = wrapped;
+        await Future<void>.delayed(_aiRetryDelay);
+      } on AiGradingException catch (error) {
+        if (!_shouldRetryAiError(error) || attempt == _aiMaxAttempts) {
+          if (attempt > 1 && _shouldRetryAiError(error)) {
+            throw AiGradingException(
+              '${error.message} Tried $_aiMaxAttempts times. '
+              'This usually means the selected OpenRouter model returned an empty answer; try again or choose a more stable model.',
+            );
+          }
+          rethrow;
+        }
+        lastRetryableError = error;
+        await Future<void>.delayed(_aiRetryDelay);
+      }
+    }
+
+    throw lastRetryableError ??
+        const AiGradingException('AI grading failed before receiving a result.');
+  }
+
+  Future<AiGradingResult> _gradeOnce(
+    AiGradingRequest request, {
+    required String apiKey,
+    required int attempt,
+  }) async {
     final httpRequest = await _httpClient.postUrl(
       Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
     );
@@ -379,18 +419,22 @@ class OpenRouterGradingService {
       ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
       ..set('HTTP-Referer', 'http://localhost/lecturer-grading-tool')
       ..set('X-Title', 'Lecturer Grading Tool');
-    final payload = _payloadFor(request);
+    final payload = _payloadFor(request, attempt: attempt);
     final payloadJson = jsonEncode(payload);
     // ignore: avoid_print
     print(
-      '--- OPENROUTER PAYLOAD ---\n$payloadJson\n--- END OPENROUTER PAYLOAD ---',
+      '--- OPENROUTER PAYLOAD attempt $attempt/$_aiMaxAttempts ---\n'
+      '$payloadJson\n--- END OPENROUTER PAYLOAD ---',
     );
     httpRequest.write(payloadJson);
 
     final response = await httpRequest.close().timeout(_aiRequestTimeout);
     final body = await utf8.decodeStream(response);
     // ignore: avoid_print
-    print('--- OPENROUTER RESPONSE ---\n$body\n--- END OPENROUTER RESPONSE ---');
+    print(
+      '--- OPENROUTER RESPONSE attempt $attempt/$_aiMaxAttempts ---\n'
+      '$body\n--- END OPENROUTER RESPONSE ---',
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiGradingException('OpenRouter request failed: $body');
     }
@@ -434,7 +478,8 @@ class OpenRouterGradingService {
     if (content == null || content.trim().isEmpty) {
       throw AiGradingException(
         'OpenRouter response did not contain content. '
-        'finish_reason=${firstChoice['finish_reason']}; body=$body',
+        'finish_reason=${firstChoice['finish_reason']}; '
+        'attempt=$attempt/$_aiMaxAttempts',
       );
     }
 
@@ -447,78 +492,99 @@ class OpenRouterGradingService {
     return AiGradingResult.fromJson(decodedJson);
   }
 
-  Map<String, Object?> _payloadFor(AiGradingRequest request) {
+  bool _shouldRetryAiError(AiGradingException error) {
+    final message = error.message.toLowerCase();
+    return message.contains('did not contain content') ||
+        message.contains('did not contain choices') ||
+        message.contains('did not return valid json') ||
+        message.contains('no json object found') ||
+        message.contains('ai output is not a json object');
+  }
+
+  Map<String, Object?> _payloadFor(AiGradingRequest request, {int attempt = 1}) {
+    final messages = <Map<String, Object?>>[
+      {
+        'role': 'system',
+        'content':
+            'You are a strict grading API. Return exactly one valid JSON object and nothing else. '
+            'Do not use Markdown. Do not wrap the JSON in code fences. '
+            'Do not return multiple JSON objects. Do not add trailing commas. '
+            'The top-level JSON object must contain exactly these keys: scores, comments. '
+            'Every value in comments must be written in Vietnamese. '
+            'Grade every rubric criterion exactly once. Scores must be integers and must not exceed maxScore. '
+            'The full grading guide in packageContext is the authoritative grading source. '
+            'Use OCR question image text in packageContext as the exam paper text. '
+            'Use extracted exam questions in packageContext when they are present. '
+            'Use expectedCriteria only as a checklist for required JSON keys and maxScore limits. '
+            'If any checklist text conflicts with the full grading guide, follow the full grading guide. '
+            'Grade by semantic content, not exact wording. '
+            'Award partial credit for relevant but incomplete answers. '
+            'Do not give zero when the submission contains directly relevant evidence for that criterion. '
+            'If the answer only matches partialCreditDescription, do not give full score.',
+      },
+      {
+        'role': 'user',
+        'content': jsonEncode({
+          'requiredJsonShape':
+              '{"scores":{"1.1":2,"1.2":3},"comments":{"1.1":"Lý do ngắn bằng tiếng Việt.","1.2":"Lý do ngắn bằng tiếng Việt."}}',
+          'rules': [
+            'Return one valid JSON object only.',
+            'scores must contain every rubric criterion id exactly once.',
+            'comments must contain a short grading reason for every rubric criterion id.',
+            'Every comment value must be written in Vietnamese.',
+            'Read the full grading guide completely before scoring.',
+            'Read the OCR question image text completely before scoring.',
+            'Use the extracted exam questions together with the full grading guide when question text is present.',
+            'Do not ignore global rules, notes, common mistakes, deductions, or exceptions in the full grading guide.',
+            'Use expectedCriteria only to ensure every required score key is present.',
+            'Accept imperfect English, spelling mistakes, and grammar mistakes when the intended project-management content is clear.',
+            'Do not require the student to use the exact rubric wording or exact labels if the required idea is present.',
+            'For each criterion, first identify evidence from the submission, then decide score from full/partial/poor descriptions.',
+            'Give zero only when the criterion is missing, unrelated, or contradicts the exam scenario.',
+            'If the submission satisfies fullCreditDescription, give maxScore.',
+            'If the submission only satisfies partialCreditDescription, give a middle score.',
+            'If the submission matches poorCreditDescription, give low score or zero.',
+            'Never give maxScore for an answer that only satisfies partialCreditDescription.',
+          ],
+          'expectedCriteria': [
+            for (final criterion in request.criteria)
+              {
+                'id': criterion.id,
+                'title': criterion.title,
+                'maxScore': criterion.maxScore,
+                'questionIndex': criterion.questionIndex,
+                'fullCreditDescription': criterion.fullCreditDescription,
+                'partialCreditDescription': criterion.partialCreditDescription,
+                'poorCreditDescription': criterion.poorCreditDescription,
+              },
+          ],
+          'packageContext': request.packageContext,
+          'submission': {
+            'alias': request.submission.alias,
+            'content': request.submission.content,
+          },
+          'questionCount': request.questionCount,
+        }),
+      },
+    ];
+
+    if (attempt > 1) {
+      messages.add({
+        'role': 'user',
+        'content':
+            'The previous attempt returned empty or non-JSON content. '
+            'Now respond with exactly one valid JSON object only. '
+            'The comments values must be short Vietnamese grading reasons.',
+      });
+    }
+
     return {
       'model': model,
       'response_format': {'type': 'json_object'},
       'reasoning': {'exclude': true},
       'temperature': 0,
       'max_completion_tokens': 4096,
-      'messages': [
-        {
-          'role': 'system',
-          'content':
-              'You are a strict grading API. Return exactly one valid JSON object and nothing else. '
-              'Do not use Markdown. Do not wrap the JSON in code fences. '
-              'Do not return multiple JSON objects. Do not add trailing commas. '
-              'The top-level JSON object must contain exactly these keys: scores, comments. '
-              'Every value in comments must be written in Vietnamese. '
-              'Grade every rubric criterion exactly once. Scores must be integers and must not exceed maxScore. '
-              'The full grading guide in packageContext is the authoritative grading source. '
-              'Use OCR question image text in packageContext as the exam paper text. '
-              'Use extracted exam questions in packageContext when they are present. '
-              'Use expectedCriteria only as a checklist for required JSON keys and maxScore limits. '
-              'If any checklist text conflicts with the full grading guide, follow the full grading guide. '
-              'Grade by semantic content, not exact wording. '
-              'Award partial credit for relevant but incomplete answers. '
-              'Do not give zero when the submission contains directly relevant evidence for that criterion. '
-              'If the answer only matches partialCreditDescription, do not give full score.',
-        },
-        {
-          'role': 'user',
-          'content': jsonEncode({
-            'requiredJsonShape':
-                '{"scores":{"1.1":2,"1.2":3},"comments":{"1.1":"Short reason.","1.2":"Short reason."}}',
-            'rules': [
-              'Return one valid JSON object only.',
-              'scores must contain every rubric criterion id exactly once.',
-              'comments must contain a short grading reason for every rubric criterion id.',
-              'Every comment value must be written in Vietnamese.',
-              'Read the full grading guide completely before scoring.',
-              'Read the OCR question image text completely before scoring.',
-              'Use the extracted exam questions together with the full grading guide when question text is present.',
-              'Do not ignore global rules, notes, common mistakes, deductions, or exceptions in the full grading guide.',
-              'Use expectedCriteria only to ensure every required score key is present.',
-              'Accept imperfect English, spelling mistakes, and grammar mistakes when the intended project-management content is clear.',
-              'Do not require the student to use the exact rubric wording or exact labels if the required idea is present.',
-              'For each criterion, first identify evidence from the submission, then decide score from full/partial/poor descriptions.',
-              'Give zero only when the criterion is missing, unrelated, or contradicts the exam scenario.',
-              'If the submission satisfies fullCreditDescription, give maxScore.',
-              'If the submission only satisfies partialCreditDescription, give a middle score.',
-              'If the submission matches poorCreditDescription, give low score or zero.',
-              'Never give maxScore for an answer that only satisfies partialCreditDescription.',
-            ],
-            'expectedCriteria': [
-              for (final criterion in request.criteria)
-                {
-                  'id': criterion.id,
-                  'title': criterion.title,
-                  'maxScore': criterion.maxScore,
-                  'questionIndex': criterion.questionIndex,
-                  'fullCreditDescription': criterion.fullCreditDescription,
-                  'partialCreditDescription': criterion.partialCreditDescription,
-                  'poorCreditDescription': criterion.poorCreditDescription,
-                },
-            ],
-            'packageContext': request.packageContext,
-            'submission': {
-              'alias': request.submission.alias,
-              'content': request.submission.content,
-            },
-            'questionCount': request.questionCount,
-          }),
-        },
-      ],
+      'messages': messages,
     };
   }
 
