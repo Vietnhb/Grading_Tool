@@ -244,7 +244,6 @@ class GradingController extends Notifier<GradingState> {
         guide: guide,
         questionImageText: questionImageText,
       );
-      _logRubricCriteria(rubricCriteria);
       _lastSavedEntries = Map<String, GradingEntry>.from(entries);
       state = state.copyWith(
         package: examPackage,
@@ -733,22 +732,6 @@ class GradingController extends Notifier<GradingState> {
       warnings: validation.warnings,
     );
     state = state.copyWith(aiSuggestions: suggestions);
-  }
-
-  void _logRubricCriteria(List<AiRubricCriterion> criteria) {
-    for (final criterion in criteria) {
-      // ignore: avoid_print
-      print(
-        [
-          'Rubric ${criterion.id}',
-          'title=${criterion.title}',
-          'maxScore=${criterion.maxScore}',
-          'fullCreditDescription=${criterion.fullCreditDescription}',
-          'partialCreditDescription=${criterion.partialCreditDescription}',
-          'poorCreditDescription=${criterion.poorCreditDescription}',
-        ].join(' | '),
-      );
-    }
   }
 
   Future<GradingGuide> _readGradingGuide(ExamPackage examPackage) {

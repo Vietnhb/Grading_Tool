@@ -86,9 +86,11 @@ class TopStatusBar extends StatelessWidget {
         _buildIconButton(Icons.chevron_left_rounded, 'Previous Student', onPrevious),
         _AliasJumpField(
           currentAlias: currentAlias,
-          totalStudents: totalStudents,
-          currentPosition: totalStudents == 0 ? 0 : currentIndex + 1,
           onSubmitted: onAliasSubmitted,
+        ),
+        _AliasPositionText(
+          currentPosition: totalStudents == 0 ? 0 : currentIndex + 1,
+          totalStudents: totalStudents,
         ),
         _buildIconButton(Icons.chevron_right_rounded, 'Next Student', onNext),
         _buildIconButton(Icons.last_page_rounded, 'Last Student', onLast),
@@ -224,17 +226,41 @@ class TopStatusBar extends StatelessWidget {
   }
 }
 
+class _AliasPositionText extends StatelessWidget {
+  const _AliasPositionText({
+    required this.currentPosition,
+    required this.totalStudents,
+  });
+
+  final int currentPosition;
+  final int totalStudents;
+
+  @override
+  Widget build(BuildContext context) {
+    if (totalStudents == 0) {
+      return const SizedBox(width: 8);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, right: 4),
+      child: Text(
+        '$currentPosition/$totalStudents',
+        style: const TextStyle(
+          color: Color(0xFF6B7272),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 class _AliasJumpField extends StatefulWidget {
   const _AliasJumpField({
     required this.currentAlias,
-    required this.currentPosition,
-    required this.totalStudents,
     required this.onSubmitted,
   });
 
   final String currentAlias;
-  final int currentPosition;
-  final int totalStudents;
   final ValueChanged<String> onSubmitted;
 
   @override
@@ -271,7 +297,7 @@ class _AliasJumpFieldState extends State<_AliasJumpField> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 142,
+      width: 118,
       height: 36,
       child: TextField(
         controller: _controller,
@@ -280,14 +306,6 @@ class _AliasJumpFieldState extends State<_AliasJumpField> {
         decoration: InputDecoration(
           isDense: true,
           labelText: 'Alias',
-          suffixText: widget.totalStudents == 0
-              ? null
-              : '${widget.currentPosition}/${widget.totalStudents}',
-          suffixStyle: const TextStyle(
-            color: Color(0xFF98A2A2),
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
           floatingLabelBehavior: FloatingLabelBehavior.always,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 10,

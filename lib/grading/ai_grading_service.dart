@@ -379,10 +379,18 @@ class OpenRouterGradingService {
       ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
       ..set('HTTP-Referer', 'http://localhost/lecturer-grading-tool')
       ..set('X-Title', 'Lecturer Grading Tool');
-    httpRequest.write(jsonEncode(_payloadFor(request)));
+    final payload = _payloadFor(request);
+    final payloadJson = jsonEncode(payload);
+    // ignore: avoid_print
+    print(
+      '--- OPENROUTER PAYLOAD ---\n$payloadJson\n--- END OPENROUTER PAYLOAD ---',
+    );
+    httpRequest.write(payloadJson);
 
     final response = await httpRequest.close().timeout(_aiRequestTimeout);
     final body = await utf8.decodeStream(response);
+    // ignore: avoid_print
+    print('--- OPENROUTER RESPONSE ---\n$body\n--- END OPENROUTER RESPONSE ---');
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiGradingException('OpenRouter request failed: $body');
     }
@@ -403,12 +411,16 @@ class OpenRouterGradingService {
     final firstChoice = choices.first as Map;
     final message = firstChoice['message'];
     String? content;
-    if (message is Map && message['content'] is String) {
-      content = message['content'] as String;
+    if (message is Map) {
+      content = _messageText(message['content']);
     }
     if (content == null || content.trim().isEmpty) {
       if (firstChoice['text'] is String) {
         content = firstChoice['text'] as String;
+      } else if (message is Map && message['reasoning'] is String) {
+        content = message['reasoning'] as String;
+      } else if (message is Map && message['reasoning_content'] is String) {
+        content = message['reasoning_content'] as String;
       } else if (message is Map && message['refusal'] != null) {
         throw AiGradingException(
           'OpenRouter refused response: ${message['refusal']}',
@@ -420,8 +432,9 @@ class OpenRouterGradingService {
       }
     }
     if (content == null || content.trim().isEmpty) {
-      throw const AiGradingException(
-        'OpenRouter response did not contain content.',
+      throw AiGradingException(
+        'OpenRouter response did not contain content. '
+        'finish_reason=${firstChoice['finish_reason']}; body=$body',
       );
     }
 
@@ -438,7 +451,9 @@ class OpenRouterGradingService {
     return {
       'model': model,
       'response_format': {'type': 'json_object'},
+      'reasoning': {'exclude': true},
       'temperature': 0,
+      'max_completion_tokens': 4096,
       'messages': [
         {
           'role': 'system',
@@ -488,6 +503,9 @@ class OpenRouterGradingService {
                   'title': criterion.title,
                   'maxScore': criterion.maxScore,
                   'questionIndex': criterion.questionIndex,
+                  'fullCreditDescription': criterion.fullCreditDescription,
+                  'partialCreditDescription': criterion.partialCreditDescription,
+                  'poorCreditDescription': criterion.poorCreditDescription,
                 },
             ],
             'packageContext': request.packageContext,
@@ -500,6 +518,27 @@ class OpenRouterGradingService {
         },
       ],
     };
+  }
+
+  String? _messageText(Object? rawContent) {
+    if (rawContent is String) {
+      return rawContent;
+    }
+    if (rawContent is List) {
+      final buffer = StringBuffer();
+      for (final item in rawContent) {
+        if (item is Map) {
+          final text = item['text'] ?? item['content'];
+          if (text is String) {
+            buffer.write(text);
+          }
+        } else if (item is String) {
+          buffer.write(item);
+        }
+      }
+      return buffer.toString();
+    }
+    return null;
   }
 
   String normalizeAiJsonResponse(String raw) {
