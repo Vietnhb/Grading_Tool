@@ -22,6 +22,7 @@ class AiGradingAuditLog {
     final record = <String, Object?>{
       'timestamp': DateTime.now().toUtc().toIso8601String(),
       'alias': submission.alias,
+      'source': 'ai',
       'model': model,
       'status': error == null && validation?.accepted == true
           ? 'accepted'
@@ -29,6 +30,7 @@ class AiGradingAuditLog {
           ? 'rejected'
           : 'failed',
       'questionScores': validation?.questionScores,
+      'criterionScores': validation?.criterionScores,
       'errors': validation?.errors,
       'warnings': validation?.warnings,
       'rawAiResponse': rawResult?.toJson(),

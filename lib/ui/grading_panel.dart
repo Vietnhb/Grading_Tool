@@ -620,12 +620,12 @@ class _AiRequestScores extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final group in sortedGroups) _AiRequestCard(group: group),
+        for (final group in sortedGroups) aiRequestCard(group: group),
       ],
     );
   }
 
-  Widget _AiRequestCard({required MapEntry<int, List<AiRubricCriterion>> group}) {
+  Widget aiRequestCard({required MapEntry<int, List<AiRubricCriterion>> group}) {
     final requestComment = _requestComment(group.value);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -661,7 +661,7 @@ class _AiRequestScores extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          for (final criterion in group.value) _AiCriterionComment(criterion),
+          for (final criterion in group.value) aiCriterionComment(criterion),
           if (requestComment.isNotEmpty) ...[
             const Divider(height: 14, color: Color(0xFFE0E5E5)),
             SelectableText(
@@ -678,7 +678,7 @@ class _AiRequestScores extends StatelessWidget {
     );
   }
 
-  Widget _AiCriterionComment(AiRubricCriterion criterion) {
+  Widget aiCriterionComment(AiRubricCriterion criterion) {
     final comment = _commentFor(criterion);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),

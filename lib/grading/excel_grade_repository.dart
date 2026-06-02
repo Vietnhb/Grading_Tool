@@ -57,7 +57,7 @@ class ExcelGradeRepository {
 
   List<XlsxCellWrite> _writesFor(int rowIndex, GradingEntry entry) {
     // Bien GradingEntry thanh danh sach cell can ghi: Alias, Marker,
-    // tung Question score va Comment.
+    // tung Question score, Total neu workbook co cot nay, va Comment.
     final writes = <XlsxCellWrite>[
       XlsxCellWrite.text(rowIndex, _layout.aliasColumn, entry.alias),
     ];
@@ -74,6 +74,10 @@ class ExcelGradeRepository {
           entry.requestScores[index],
         ),
       );
+    }
+    final totalColumn = _layout.totalColumn;
+    if (totalColumn != null) {
+      writes.add(XlsxCellWrite.number(rowIndex, totalColumn, entry.total));
     }
     writes.add(
       XlsxCellWrite.text(rowIndex, _layout.commentColumn, entry.comment),
@@ -97,6 +101,10 @@ class ExcelGradeRepository {
         _layout.requestColumns[index],
         entry.requestScores[index],
       );
+    }
+    final totalColumn = _layout.totalColumn;
+    if (totalColumn != null) {
+      _cacheNumber(sheet, rowIndex, totalColumn, entry.total);
     }
     _cacheText(sheet, rowIndex, _layout.commentColumn, entry.comment);
   }
@@ -146,12 +154,20 @@ class ExcelGradeRepository {
         if (commentColumn == null) {
           continue;
         }
+        final totalColumn = _findColumn(headers, const [
+          'total',
+          'total score',
+          'total mark',
+          'score',
+          'mark',
+        ]);
         return SheetLayout(
           sheetName: sheetName,
           headerRow: rowIndex,
           aliasColumn: aliasColumn,
           markerColumn: markerColumn,
           requestColumns: requestColumns,
+          totalColumn: totalColumn,
           commentColumn: commentColumn,
         );
       }
@@ -384,6 +400,7 @@ class SheetLayout {
     required this.aliasColumn,
     required this.markerColumn,
     required this.requestColumns,
+    required this.totalColumn,
     required this.commentColumn,
   });
 
@@ -392,5 +409,6 @@ class SheetLayout {
   final int aliasColumn;
   final int markerColumn;
   final List<int> requestColumns;
+  final int? totalColumn;
   final int commentColumn;
 }

@@ -5,8 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/app_exception.dart';
+import '../core/constants.dart';
 import '../submission/submission_models.dart';
-import 'ai_api_key_store.dart';
+import '../config/ai_api_key_store.dart';
 import 'ai_grading_audit_log.dart';
 import 'ai_grading_service.dart';
 import 'ai_grading_validator.dart';
@@ -40,7 +41,7 @@ class GradingState {
     this.openRouterApiKeyConfigured = false,
     this.openRouterApiKeyInvalid = false,
     this.openRouterApiKeyPreview = '',
-    this.openRouterModel = 'openai/gpt-oss-120b:free',
+    this.openRouterModel = AppConstants.defaultAiModel,
     this.packageContext = '',
     this.questionImageText = '',
     this.autoSave = true,

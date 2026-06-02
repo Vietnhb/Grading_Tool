@@ -52,7 +52,7 @@ class TopStatusBar extends StatelessWidget {
         border: const Border(bottom: BorderSide(color: Color(0xFFE0E5E5))),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             offset: const Offset(0, 2),
             blurRadius: 4,
           )

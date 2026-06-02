@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../submission/submission_models.dart';
-import 'ai_api_key_store.dart';
+import '../core/constants.dart';
+import '../config/ai_api_key_store.dart';
 import 'grading_models.dart';
 
-const _aiRequestTimeout = Duration(seconds: 90);
+const _aiRequestTimeout = AppConstants.aiRequestTimeout;
 
 class AiRubricCriterion {
   const AiRubricCriterion({
@@ -533,7 +534,7 @@ class OpenRouterGradingService {
     return {
       'model': model,
       'temperature': 0,
-      'max_completion_tokens': 4096,
+      'max_completion_tokens': AppConstants.aiMaxTokens,
       'messages': messages,
     };
   }

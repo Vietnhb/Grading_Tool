@@ -49,8 +49,8 @@ class _DropPackagePanelState extends State<DropPackagePanel>
               boxShadow: [
                 BoxShadow(
                   color: _dragging
-                      ? const Color(0xFF1E4C4C).withOpacity(0.12)
-                      : Colors.black.withOpacity(0.04),
+                      ? const Color(0xFF1E4C4C).withValues(alpha: 0.12)
+                      : Colors.black.withValues(alpha: 0.04),
                   blurRadius: _dragging ? 24 : 12,
                   spreadRadius: _dragging ? 4 : 0,
                   offset: const Offset(0, 4),
@@ -222,3 +222,4 @@ class _DropPackagePanelState extends State<DropPackagePanel>
     }
   }
 }
+

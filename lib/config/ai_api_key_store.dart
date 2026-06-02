@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../core/constants.dart';
+
 class AiSettings {
   const AiSettings({
     this.openRouterApiKey,
-    this.openRouterModel = 'openai/gpt-oss-120b:free',
+    this.openRouterModel = AppConstants.defaultAiModel,
   });
 
   final String? openRouterApiKey;
@@ -32,7 +34,7 @@ class AiSettings {
         savedModel == null ||
         savedModel == 'meta-llama/llama-3.1-8b-instruct:free' ||
         savedModel == 'openai/gpt-oss-20b:free';
-    final model = shouldUseDefault ? 'openai/gpt-oss-120b:free' : savedModel;
+    final model = shouldUseDefault ? AppConstants.defaultAiModel : savedModel;
     return AiSettings(
       openRouterApiKey: json['openRouterApiKey'] as String?,
       openRouterModel: model,
@@ -47,7 +49,7 @@ class AiSettings {
 
 bool isValidOpenRouterApiKey(String? apiKey) {
   final value = apiKey?.trim() ?? '';
-  return value.startsWith('sk-or-v1-') && value.length > 'sk-or-v1-'.length;
+  return value.startsWith(AppConstants.openRouterKeyPrefix) && value.length > AppConstants.openRouterKeyMinLength;
 }
 
 class AiApiKeyStore {
