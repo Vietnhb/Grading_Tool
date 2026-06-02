@@ -235,6 +235,18 @@ class GradingController extends Notifier<GradingState> {
     );
   }
 
+  void closePackage() {
+    // Reset ve man hinh chon folder, giu lai AI settings.
+    _lastSavedEntries = {};
+    state = GradingState(
+      openRouterApiKeyConfigured: _openRouterGradingService.hasApiKey,
+      openRouterApiKeyInvalid: false,
+      openRouterApiKeyPreview: _openRouterGradingService.apiKeyPreview,
+      openRouterModel: _openRouterGradingService.model,
+      statusMessage: 'Drop an exam package folder to begin.',
+    );
+  }
+
   Future<void> loadPackage(String path) async {
     // Flow load package:
     // 1) PackageDetector.detect(path) kiem tra folder dau vao.

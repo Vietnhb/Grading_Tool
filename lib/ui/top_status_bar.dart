@@ -15,6 +15,7 @@ class TopStatusBar extends StatelessWidget {
     required this.onMarkerChanged,
     required this.onAiSettings,
     required this.onOpenPackage,
+    required this.onClosePackage,
     required this.onFirst,
     required this.onPrevious,
     required this.onNext,
@@ -36,6 +37,7 @@ class TopStatusBar extends StatelessWidget {
   final ValueChanged<String> onMarkerChanged;
   final VoidCallback onAiSettings;
   final Future<void> Function() onOpenPackage;
+  final VoidCallback onClosePackage;
   final VoidCallback onFirst;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
@@ -73,6 +75,8 @@ class TopStatusBar extends StatelessWidget {
           _buildAiSettingsButton(),
           const SizedBox(width: 12),
           _buildIconButton(Icons.folder_open_rounded, 'Open Folder', onOpenPackage),
+          const SizedBox(width: 4),
+          _buildIconButton(Icons.swap_horiz_rounded, 'Change Folder', onClosePackage),
         ],
       ),
     );

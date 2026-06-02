@@ -192,6 +192,10 @@ class _StatusArea extends ConsumerWidget {
           onMove(() => controller.selectMarker(marker)),
       onAiSettings: () => _showAiSettingsDialog(context, controller, state),
       onOpenPackage: controller.openPackageFolder,
+      onClosePackage: () => onMove(() async {
+        controller.closePackage();
+        return true;
+      }),
       onFirst: () => onMove(() => controller.goToIndex(0)),
       onPrevious: () => onMove(controller.previousStudent),
       onNext: () => onMove(controller.nextStudent),
