@@ -205,7 +205,7 @@ class _StatusArea extends ConsumerWidget {
       onAliasSubmitted: (alias) => onMove(() => controller.goToAlias(alias)),
     );
   }
-
+  // Thêm API key và model
   Future<void> _showAiSettingsDialog(
     BuildContext context,
     GradingController controller,
