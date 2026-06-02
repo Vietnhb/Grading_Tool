@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -8,8 +8,8 @@ import '../core/constants.dart';
 
 class QuestionOcrReader {
   const QuestionOcrReader({
-    this.minimumTextLength = AppConstants.ocrMinTextLength,
-    this.minimumQuestionHeadings = AppConstants.ocrMinQuestionHeadings,
+    this.minimumTextLength = 200,
+    this.minimumQuestionHeadings = 1,
   });
 
   final int minimumTextLength;
@@ -17,13 +17,14 @@ class QuestionOcrReader {
 
   Future<String> read(File imageFile) async {
     final outputDirectory = Directory.systemTemp.createTempSync(
-      'lecturer_grading_ocr_',
+      AppConstants.ocrTempFolderPrefix,
     );
     final processedImage = File(
-      p.join(outputDirectory.path, 'question_alpha_ocr.png'),
+      p.join(outputDirectory.path, AppConstants.ocrProcessedImageName),
     );
-    final scriptFile = File(p.join(outputDirectory.path, 'question_ocr.ps1'))
-      ..writeAsStringSync(_windowsOcrScript(AppConstants.ocrLanguage));
+    final scriptFile = File(
+      p.join(outputDirectory.path, AppConstants.ocrScriptFileName),
+    )..writeAsStringSync(_windowsOcrScript);
 
     try {
       final result = await Process.run('powershell.exe', [
@@ -81,7 +82,7 @@ class QuestionOcrReader {
     ).allMatches(text).length;
 
     if (text.length < minimumTextLength ||
-        lineCount < AppConstants.ocrMinLineCount ||
+        lineCount < 3 ||
         questionHeadings < minimumQuestionHeadings) {
       throw AppException(
         'OCR text from $imageName is not reliable enough for AI grading. '
@@ -92,10 +93,7 @@ class QuestionOcrReader {
   }
 }
 
-String _windowsOcrScript(String ocrLanguage) =>
-    _windowsOcrScriptTemplate.replaceAll('__OCR_LANGUAGE__', ocrLanguage);
-
-const _windowsOcrScriptTemplate = r'''
+const _windowsOcrScript = r'''
 param(
   [Parameter(Mandatory=$true)][string]$InputImage,
   [Parameter(Mandatory=$true)][string]$ProcessedImage
@@ -227,7 +225,7 @@ $file = AwaitOp ([Windows.Storage.StorageFile]::GetFileFromPathAsync($ProcessedI
 $stream = AwaitOp ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
 $decoder = AwaitOp ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
 $bitmap = AwaitOp ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('__OCR_LANGUAGE__'))
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('en-US'))
 $result = AwaitOp ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
 
 $lines = @()
@@ -244,11 +242,10 @@ foreach ($line in $result.Lines) {
 
 [pscustomobject]@{
   engine = 'Windows.Media.Ocr'
-  language = '__OCR_LANGUAGE__'
+  language = 'en-US'
   preprocessing = 'alpha-mask crop white-background black-text scale-2x'
   text = $result.Text
   lineCount = $lines.Count
   lines = $lines
 } | ConvertTo-Json -Depth 6
 ''';
-

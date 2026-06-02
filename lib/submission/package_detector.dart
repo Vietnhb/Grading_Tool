@@ -17,40 +17,49 @@ class PackageDetector {
     }
 
     final rootFiles = await _files(root);
-    final solutions = Directory(p.join(root.path, AppConstants.studentSolutionsFolder));
+    final solutions = Directory(
+      p.join(root.path, AppConstants.studentSolutionsFolder),
+    );
     if (!solutions.existsSync()) {
-      throw const AppException('Student_Solutions folder not found.');
+      throw AppException(
+        '${AppConstants.studentSolutionsFolder} folder not found.',
+      );
     }
 
     final studentFiles =
-        (await _files(
-            solutions,
-          )).where((file) => extensionOf(file) == AppConstants.submissionExtension).toList()
+        (await _files(solutions))
+            .where(
+              (file) => extensionOf(file) == AppConstants.submissionExtension,
+            )
+            .toList()
           ..sort((a, b) => compareAliases(aliasFromFile(a), aliasFromFile(b)));
     // Sau khi co danh sach file .txt, controller se dung alias cua tung file
     // de map voi dong tuong ung trong Excel.
     if (studentFiles.isEmpty) {
-      throw const AppException('Student Solutions student empty.');
+      throw AppException(
+        'No ${AppConstants.submissionExtension} files found in ${AppConstants.studentSolutionsFolder}.',
+      );
     }
 
     return ExamPackage(
       rootDirectory: root,
       markSheetFile: _single(
         rootFiles,
-        (file) => extensionOf(file) == AppConstants.markInputExtension,
-        'No XLSX mark input file was found.',
-        'More than one XLSX mark input file was found.',
+        (file) => {AppConstants.markInputExtension}.contains(extensionOf(file)),
+        'No ${AppConstants.markInputExtension} mark input file was found.',
+        'More than one ${AppConstants.markInputExtension} mark input file was found.',
       ),
       studentFiles: studentFiles,
       gradingGuideFile: _single(
         rootFiles,
         (file) => extensionOf(file) == AppConstants.gradingGuideExtension,
-        'No DOCX grading guide was found.',
-        'More than one DOCX grading guide was found.',
+        'No ${AppConstants.gradingGuideExtension} grading guide was found.',
+        'More than one ${AppConstants.gradingGuideExtension} grading guide was found.',
       ),
       questionImageFile: _single(
         rootFiles,
-        (file) => AppConstants.supportedImageExtensions.contains(extensionOf(file)),
+        (file) =>
+            AppConstants.supportedImageExtensions.contains(extensionOf(file)),
         'No question image was found.',
         'More than one question image was found.',
       ),

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../core/constants.dart';
 import '../submission/submission_models.dart';
 import 'ai_grading_service.dart';
 import 'ai_grading_validator.dart';
@@ -55,8 +56,7 @@ class AiGradingAuditLog {
                 ),
           };
         }
-      } catch (error) {
-        stderr.writeln('[AiGradingAuditLog] Failed to read audit: $error');
+      } catch (_) {
         return {};
       }
     }
@@ -76,7 +76,7 @@ class AiGradingAuditLog {
 
   File _auditFile(Directory packageDirectory) {
     return File(
-      '${packageDirectory.path}${Platform.pathSeparator}grading_log.json',
+      '${packageDirectory.path}${Platform.pathSeparator}${AppConstants.gradingAuditFileName}',
     );
   }
 }

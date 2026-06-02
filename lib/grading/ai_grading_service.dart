@@ -6,6 +6,7 @@ import '../core/constants.dart';
 import '../config/ai_api_key_store.dart';
 import 'grading_models.dart';
 
+const _aiRequestTimeout = AppConstants.aiRequestTimeout;
 
 class AiRubricCriterion {
   const AiRubricCriterion({
@@ -293,9 +294,8 @@ class AiRubricExtractor {
           collectingMistakes = false;
         case ParagraphBlock(:final text):
           final normalized = text.toLowerCase();
-          if (AppConstants.commonMistakesKeywords.any(
-              (keyword) => normalized.contains(keyword),
-          )) {
+          if (normalized.contains('lỗi thường gặp') ||
+              normalized.contains('common mistake')) {
             collectingMistakes = true;
           } else if (collectingMistakes && text.trim().isNotEmpty) {
             currentMistakes.add(text.trim());
@@ -463,7 +463,7 @@ class OpenRouterGradingService {
     String? apiKey,
     this.model = AppConstants.defaultAiModel,
   }) : _httpClient = httpClient ?? HttpClient(),
-       _apiKey = apiKey;
+       _apiKey = apiKey ?? Platform.environment['OPENROUTER_API_KEY'];
 
   final HttpClient _httpClient;
   String? _apiKey;
@@ -473,7 +473,7 @@ class OpenRouterGradingService {
 
   String get apiKeyPreview {
     final apiKey = _apiKey;
-    if (apiKey == null || apiKey.length < AppConstants.apiKeyPreviewMinLength) {
+    if (apiKey == null || apiKey.length < 8) {
       return '';
     }
     return '${apiKey.substring(0, 7)}...${apiKey.substring(apiKey.length - 4)}';
@@ -548,18 +548,18 @@ class OpenRouterGradingService {
     required String apiKey,
   }) async {
     final httpRequest = await _httpClient.postUrl(
-      Uri.parse(AppConstants.openRouterApiUrl),
+      Uri.parse(AppConstants.openRouterChatCompletionsUrl),
     );
     httpRequest.headers
       ..contentType = ContentType.json
       ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
       ..set('HTTP-Referer', AppConstants.openRouterReferer)
-      ..set('X-Title', AppConstants.openRouterAppTitle);
+      ..set('X-Title', AppConstants.openRouterTitle);
     final payload = _payloadFor(request);
     final payloadJson = jsonEncode(payload);
     httpRequest.write(payloadJson);
 
-    final response = await httpRequest.close().timeout(AppConstants.aiRequestTimeout);
+    final response = await httpRequest.close().timeout(_aiRequestTimeout);
     final body = await utf8.decodeStream(response);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiGradingException('OpenRouter request failed: $body');
@@ -587,6 +587,10 @@ class OpenRouterGradingService {
     if (content == null || content.trim().isEmpty) {
       if (firstChoice['text'] is String) {
         content = firstChoice['text'] as String;
+      } else if (message is Map && message['reasoning'] is String) {
+        content = message['reasoning'] as String;
+      } else if (message is Map && message['reasoning_content'] is String) {
+        content = message['reasoning_content'] as String;
       } else if (message is Map && message['refusal'] != null) {
         throw AiGradingException(
           'OpenRouter refused response: ${message['refusal']}',
@@ -604,7 +608,7 @@ class OpenRouterGradingService {
       );
     }
 
-    final decodedJson = jsonDecode(_normalizeAiJsonResponse(content));
+    final decodedJson = jsonDecode(normalizeAiJsonResponse(content));
     if (decodedJson is! Map<String, dynamic>) {
       throw const AiGradingException(
         'AI output is not a JSON object. No score was applied.',
@@ -618,16 +622,16 @@ class OpenRouterGradingService {
     required String apiKey,
   }) async {
     final httpRequest = await _httpClient.postUrl(
-      Uri.parse(AppConstants.openRouterApiUrl),
+      Uri.parse(AppConstants.openRouterChatCompletionsUrl),
     );
     httpRequest.headers
       ..contentType = ContentType.json
       ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
       ..set('HTTP-Referer', AppConstants.openRouterReferer)
-      ..set('X-Title', AppConstants.openRouterAppTitle);
+      ..set('X-Title', AppConstants.openRouterTitle);
     httpRequest.write(jsonEncode(_batchPayloadFor(request)));
 
-    final response = await httpRequest.close().timeout(AppConstants.aiRequestTimeout);
+    final response = await httpRequest.close().timeout(_aiRequestTimeout);
     final body = await utf8.decodeStream(response);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiGradingException('OpenRouter request failed: $body');
@@ -656,7 +660,7 @@ class OpenRouterGradingService {
       );
     }
 
-    final decodedJson = jsonDecode(_normalizeAiJsonResponse(content));
+    final decodedJson = jsonDecode(normalizeAiJsonResponse(content));
     if (decodedJson is! Map<String, dynamic>) {
       throw const AiGradingException(
         'AI batch output is not a JSON object. No score was applied.',
@@ -666,23 +670,23 @@ class OpenRouterGradingService {
   }
 
   Future<T> _withTransientRetries<T>(Future<T> Function() request) async {
-    const delays = [
-      Duration(seconds: 3),
-      Duration(seconds: 8),
-      Duration(seconds: 15),
-    ];
-
     AiGradingException? lastError;
-    for (var attempt = 0; attempt <= delays.length; attempt += 1) {
+    for (
+      var attempt = 0;
+      attempt <= AppConstants.aiTransientRetryDelays.length;
+      attempt += 1
+    ) {
       try {
         return await request();
       } on AiGradingException catch (error) {
         if (!_isTransientOpenRouterError(error.message) ||
-            attempt == delays.length) {
+            attempt == AppConstants.aiTransientRetryDelays.length) {
           rethrow;
         }
         lastError = error;
-        await Future<void>.delayed(delays[attempt]);
+        await Future<void>.delayed(
+          AppConstants.aiTransientRetryDelays[attempt],
+        );
       }
     }
 
@@ -750,7 +754,7 @@ class OpenRouterGradingService {
 
     return {
       'model': model,
-      'temperature': 0,
+      'temperature': AppConstants.aiTemperature,
       'max_completion_tokens': AppConstants.aiMaxTokens,
       'messages': messages,
     };
@@ -814,7 +818,7 @@ class OpenRouterGradingService {
 
     return {
       'model': model,
-      'temperature': 0,
+      'temperature': AppConstants.aiTemperature,
       'max_completion_tokens': AppConstants.aiMaxTokens,
       'messages': messages,
     };
@@ -841,7 +845,7 @@ class OpenRouterGradingService {
     return null;
   }
 
-  String _normalizeAiJsonResponse(String raw) {
+  String normalizeAiJsonResponse(String raw) {
     var normalized = raw.trim();
     if (normalized.startsWith('```')) {
       normalized = normalized.substring(3).trimLeft();

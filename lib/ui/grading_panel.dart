@@ -573,6 +573,10 @@ class _AiGradingSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentSuggestion = suggestion;
     final hasPackageContext = packageContext.trim().isNotEmpty;
+    final actionLabel = currentSuggestion == null
+        ? 'Run AI grading'
+        : 'Run AI Re-Grading';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -597,7 +601,7 @@ class _AiGradingSection extends StatelessWidget {
                     ),
                   )
                 : const Icon(Icons.auto_awesome_rounded, size: 18),
-            label: Text(isAiGrading ? 'AI grading...' : 'Run AI grading'),
+            label: Text(isAiGrading ? 'AI grading...' : actionLabel),
           ),
         ),
         if (!hasPackageContext) ...[

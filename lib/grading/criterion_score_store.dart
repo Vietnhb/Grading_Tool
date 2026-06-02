@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../core/constants.dart';
 import 'ai_grading_service.dart';
 import 'grading_models.dart';
 
@@ -100,8 +101,7 @@ class CriterionScoreStore {
                 ),
           };
         }
-      } catch (error) {
-        stderr.writeln('[CriterionScoreStore] Failed to read audit: $error');
+      } catch (_) {
         return {};
       }
     }
@@ -128,7 +128,12 @@ class CriterionScoreStore {
     if (rawScores is Map) {
       return _parseScoreMap(rawScores);
     }
-    return null;
+    final rawResponse = typedBranch['rawAiResponse'];
+    if (rawResponse is! Map) {
+      return null;
+    }
+    final responseScores = rawResponse['scores'];
+    return responseScores is Map ? _parseScoreMap(responseScores) : null;
   }
 
   AiGradeSuggestion? _aiSuggestionFrom(
@@ -144,7 +149,7 @@ class CriterionScoreStore {
       return null;
     }
     final warnings = _parseStringList(branch['warnings']);
-    if (_isSuspiciousAllZero(questionScores)) {
+    if (_isSuspiciousAllZero(questionScores, warnings)) {
       return null;
     }
     return AiGradeSuggestion(
@@ -155,7 +160,7 @@ class CriterionScoreStore {
     );
   }
 
-  bool _isSuspiciousAllZero(List<int?> questionScores) {
+  bool _isSuspiciousAllZero(List<int?> questionScores, List<String> warnings) {
     final allZero =
         questionScores.isNotEmpty &&
         questionScores.every((score) => score != null && score == 0);
@@ -228,7 +233,7 @@ class CriterionScoreStore {
 
   File _auditFile(Directory packageDirectory) {
     return File(
-      '${packageDirectory.path}${Platform.pathSeparator}grading_log.json',
+      '${packageDirectory.path}${Platform.pathSeparator}${AppConstants.gradingAuditFileName}',
     );
   }
 }

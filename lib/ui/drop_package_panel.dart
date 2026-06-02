@@ -2,6 +2,8 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../core/constants.dart';
+
 class DropPackagePanel extends StatefulWidget {
   const DropPackagePanel({
     required this.onPackageSelected,
@@ -43,7 +45,9 @@ class _DropPackagePanelState extends State<DropPackagePanel>
               color: _dragging ? const Color(0xFFE8F3F1) : Colors.white,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
-                color: _dragging ? const Color(0xFF1E4C4C) : const Color(0xFFE0E5E5),
+                color: _dragging
+                    ? const Color(0xFF1E4C4C)
+                    : const Color(0xFFE0E5E5),
                 width: _dragging ? 2 : 1,
               ),
               boxShadow: [
@@ -89,17 +93,14 @@ class _DropPackagePanelState extends State<DropPackagePanel>
         Text(
           'Drop exam package here',
           style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF1A1C1C),
-              ),
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF1A1C1C),
+          ),
         ),
         const SizedBox(height: 12),
         const Text(
           'Please ensure your folder contains the following items:',
-          style: TextStyle(
-            fontSize: 15,
-            color: Color(0xFF6B7272),
-          ),
+          style: TextStyle(fontSize: 15, color: Color(0xFF6B7272)),
         ),
         const SizedBox(height: 24),
         Container(
@@ -112,9 +113,18 @@ class _DropPackagePanelState extends State<DropPackagePanel>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildChecklistItem(Icons.table_chart_rounded, 'Mark Input XLSX file'),
-              _buildChecklistItem(Icons.folder_shared_rounded, 'Student Solutions folder'),
-              _buildChecklistItem(Icons.description_rounded, 'Grading guide (.docx)'),
+              _buildChecklistItem(
+                Icons.table_chart_rounded,
+                'Mark Input ${AppConstants.markInputExtension} file',
+              ),
+              _buildChecklistItem(
+                Icons.folder_shared_rounded,
+                '${AppConstants.studentSolutionsFolder} folder',
+              ),
+              _buildChecklistItem(
+                Icons.description_rounded,
+                'Grading guide (${AppConstants.gradingGuideExtension})',
+              ),
             ],
           ),
         ),
@@ -198,17 +208,14 @@ class _DropPackagePanelState extends State<DropPackagePanel>
           Text(
             'Scanning exam package...',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1A1C1C),
-                ),
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF1A1C1C),
+            ),
           ),
           const SizedBox(height: 12),
           const Text(
             'Extracting rubric and preparing AI constraints',
-            style: TextStyle(
-              fontSize: 15,
-              color: Color(0xFF6B7272),
-            ),
+            style: TextStyle(fontSize: 15, color: Color(0xFF6B7272)),
           ),
         ],
       ),
@@ -222,4 +229,3 @@ class _DropPackagePanelState extends State<DropPackagePanel>
     }
   }
 }
-

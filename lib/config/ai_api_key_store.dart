@@ -32,7 +32,7 @@ class AiSettings {
     final savedModel = json['openRouterModel'] as String?;
     final shouldUseDefault =
         savedModel == null ||
-        AppConstants.deprecatedAiModels.contains(savedModel);
+        AppConstants.legacyDefaultAiModels.contains(savedModel);
     final model = shouldUseDefault ? AppConstants.defaultAiModel : savedModel;
     return AiSettings(
       openRouterApiKey: json['openRouterApiKey'] as String?,
@@ -48,7 +48,8 @@ class AiSettings {
 
 bool isValidOpenRouterApiKey(String? apiKey) {
   final value = apiKey?.trim() ?? '';
-  return value.startsWith(AppConstants.openRouterKeyPrefix) && value.length > AppConstants.openRouterKeyMinLength;
+  return value.startsWith(AppConstants.openRouterKeyPrefix) &&
+      value.length > AppConstants.openRouterKeyMinLength;
 }
 
 class AiApiKeyStore {
@@ -64,11 +65,9 @@ class AiApiKeyStore {
       if (decoded is Map) {
         return AiSettings.fromJson(decoded);
       }
-    } catch (error) {
-      stderr.writeln('[AiApiKeyStore] Failed to read settings: $error');
+    } catch (_) {
       return const AiSettings();
     }
-    stderr.writeln('[AiApiKeyStore] Settings file contains non-Map JSON; using defaults.');
     return const AiSettings();
   }
 
