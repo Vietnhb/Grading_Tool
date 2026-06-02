@@ -49,3 +49,11 @@ examPakage
 .env.local
 tool
 
+# Local SonarQube scanner artifacts
+.scannerwork/
+analysis_options.yaml.sonar
+
+# Local secrets and environment overrides
+.env
+*.local
+

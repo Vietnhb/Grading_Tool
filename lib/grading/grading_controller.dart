@@ -235,15 +235,14 @@ class GradingController extends Notifier<GradingState> {
     );
   }
 
+  /// Resets the loaded package while keeping the saved AI settings.
   void closePackage() {
     // Reset ve man hinh chon folder, giu lai AI settings.
-    _lastSavedEntries = {};
+    _lastSavedEntries = <String, GradingEntry>{};
     state = GradingState(
       openRouterApiKeyConfigured: _openRouterGradingService.hasApiKey,
-      openRouterApiKeyInvalid: false,
       openRouterApiKeyPreview: _openRouterGradingService.apiKeyPreview,
       openRouterModel: _openRouterGradingService.model,
-      statusMessage: 'Drop an exam package folder to begin.',
     );
   }
 
@@ -443,7 +442,7 @@ class GradingController extends Notifier<GradingState> {
   }
 
   void setAutoSave(bool enabled) => state = state.copyWith(autoSave: enabled);
-// lưu API key 
+
   Future<bool> saveAiSettings({
     required String openRouterApiKey,
     required String openRouterModel,
