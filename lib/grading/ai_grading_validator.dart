@@ -39,14 +39,20 @@ class AiGradingValidator {
         errors.add('Criterion ${entry.key} is not defined in the rubric.');
         continue;
       }
-      if (entry.value < 0 || entry.value > criterion.maxScore) {
-        errors.add(
-          'Criterion ${entry.key} score ${entry.value} is outside 0-${criterion.maxScore}.',
+      var score = entry.value;
+      if (score < 0) {
+        warnings.add(
+          'Criterion ${entry.key}: AI returned ${entry.value}; clamped to 0.',
         );
-        continue;
+        score = 0;
+      } else if (score > criterion.maxScore) {
+        warnings.add(
+          'Criterion ${entry.key}: AI returned ${entry.value}; clamped to ${criterion.maxScore}.',
+        );
+        score = criterion.maxScore;
       }
-      criterionScores[entry.key] = entry.value;
-      questionTotals[criterion.questionIndex] += entry.value;
+      criterionScores[entry.key] = score;
+      questionTotals[criterion.questionIndex] += score;
     }
 
     for (final criterion in rubric) {
@@ -63,7 +69,7 @@ class AiGradingValidator {
         totalScore == 0 &&
         _hasSubstantialAnswer(submissionContent)) {
       errors.add(
-        'AI returned all zero scores for a non-empty submission. Review or rerun before accepting.',
+        'AI returned all zero scores for a non-empty/substantial submission. Regrade or review manually.',
       );
     }
 

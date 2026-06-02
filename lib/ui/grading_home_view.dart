@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/file_name_utils.dart';
 import '../grading/grading_controller.dart';
 import 'drop_package_panel.dart';
 import 'grading_panel.dart';
+import 'grading_summary_section.dart';
 import 'submission_viewer.dart';
 import 'top_status_bar.dart';
 
@@ -374,6 +376,17 @@ class _GradingArea extends ConsumerWidget {
     if (submission == null || entry == null) {
       return const SizedBox.shrink();
     }
+    final visibleAliases = state.visibleSubmissions.map(aliasFromFile).toList();
+    final aliasScoreOverview = [
+      for (final alias in visibleAliases)
+        AliasScoreOverview(
+          alias: alias,
+          teacherTotal: _hasTeacherGrades(state, alias)
+              ? state.entries[alias]?.total
+              : null,
+          aiTotal: state.aiSuggestions[alias]?.total,
+        ),
+    ];
 
     return GradingPanel(
       entry: entry,
@@ -384,6 +397,17 @@ class _GradingArea extends ConsumerWidget {
       rubricCriteria: state.rubricCriteria,
       criterionScores: state.currentCriterionScores,
       aiSuggestion: state.currentAiSuggestion,
+      packageContext: state.packageContext,
+      aliasScoreOverview: aliasScoreOverview,
+      aiBatchTotal: visibleAliases.length,
+      aiBatchRemaining: state.visibleSubmissions
+          .map(aliasFromFile)
+          .where((alias) => !state.aiSuggestions.containsKey(alias))
+          .length,
+      aiApplyRemaining: state.visibleSubmissions
+          .map(aliasFromFile)
+          .where(state.isAiApplyPending)
+          .length,
       showMarker: state.selectedMarker.isNotEmpty,
       maxScores: state.gradingGuide.maxScores,
       onScoreChanged: controller.updateScore,
@@ -391,9 +415,21 @@ class _GradingArea extends ConsumerWidget {
       onCommentChanged: controller.updateComment,
       onAutoSaveChanged: controller.setAutoSave,
       onAiSuggest: controller.suggestAiGrade,
+      onAiBatchSuggest: controller.suggestAiGradesForVisibleBatch,
+      onApplyAiBatch: controller.applyAiSuggestionsToVisibleBatch,
       onApplyAiSuggestion: controller.applyAiSuggestionToTeacherGrade,
       onSave: controller.saveCurrent,
     );
+  }
+
+  bool _hasTeacherGrades(GradingState state, String alias) {
+    final entry = state.entries[alias];
+    if (entry == null) {
+      return false;
+    }
+    final criteria = state.criterionScores[alias] ?? const {};
+    return entry.requestScores.any((score) => score != null) ||
+        criteria.values.any((score) => score != null);
   }
 }
 

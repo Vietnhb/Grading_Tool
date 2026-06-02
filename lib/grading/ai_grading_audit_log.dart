@@ -8,7 +8,7 @@ import 'ai_grading_validator.dart';
 class AiGradingAuditLog {
   const AiGradingAuditLog();
 
-  Future<void> append({
+  Future<void> saveAi({
     required Directory packageDirectory,
     required StudentSubmission submission,
     required String model,
@@ -16,13 +16,12 @@ class AiGradingAuditLog {
     required AiValidationResult? validation,
     Object? error,
   }) async {
-    final file = File(
-      '${packageDirectory.path}${Platform.pathSeparator}ai_grading_audit.jsonl',
+    final audit = await _readAudit(packageDirectory);
+    final record = Map<String, Object?>.from(
+      audit[submission.alias] ?? const {},
     );
-    final record = <String, Object?>{
+    record['ai'] = {
       'timestamp': DateTime.now().toUtc().toIso8601String(),
-      'alias': submission.alias,
-      'source': 'ai',
       'model': model,
       'status': error == null && validation?.accepted == true
           ? 'accepted'
@@ -36,11 +35,47 @@ class AiGradingAuditLog {
       'rawAiResponse': rawResult?.toJson(),
       'error': error?.toString(),
     };
+    audit[submission.alias] = record;
+    await _writeAudit(packageDirectory, audit);
+  }
 
-    await file.writeAsString(
-      '${jsonEncode(record)}\n',
-      mode: FileMode.append,
+  Future<Map<String, Map<String, Object?>>> _readAudit(
+    Directory packageDirectory,
+  ) async {
+    final file = _auditFile(packageDirectory);
+    if (await file.exists()) {
+      try {
+        final decoded = jsonDecode(await file.readAsString());
+        if (decoded is Map) {
+          return {
+            for (final entry in decoded.entries)
+              if (entry.value is Map)
+                entry.key.toString(): Map<String, Object?>.from(
+                  entry.value as Map,
+                ),
+          };
+        }
+      } catch (_) {
+        return {};
+      }
+    }
+
+    return {};
+  }
+
+  Future<void> _writeAudit(
+    Directory packageDirectory,
+    Map<String, Map<String, Object?>> audit,
+  ) async {
+    await _auditFile(packageDirectory).writeAsString(
+      const JsonEncoder.withIndent('  ').convert(audit),
       flush: true,
+    );
+  }
+
+  File _auditFile(Directory packageDirectory) {
+    return File(
+      '${packageDirectory.path}${Platform.pathSeparator}grading_log.json',
     );
   }
 }
