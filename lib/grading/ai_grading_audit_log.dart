@@ -55,7 +55,8 @@ class AiGradingAuditLog {
                 ),
           };
         }
-      } catch (_) {
+      } catch (error) {
+        stderr.writeln('[AiGradingAuditLog] Failed to read audit: $error');
         return {};
       }
     }

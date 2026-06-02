@@ -1,3 +1,4 @@
+import '../core/constants.dart';
 import 'ai_grading_service.dart';
 
 class AiValidationResult {
@@ -84,7 +85,7 @@ class AiGradingValidator {
 
   bool _hasSubstantialAnswer(String content) {
     final normalized = content.trim();
-    if (normalized.length < 200) {
+    if (normalized.length < AppConstants.minSubstantialAnswerLength) {
       return false;
     }
     return RegExp(

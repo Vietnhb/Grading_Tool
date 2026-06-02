@@ -100,7 +100,8 @@ class CriterionScoreStore {
                 ),
           };
         }
-      } catch (_) {
+      } catch (error) {
+        stderr.writeln('[CriterionScoreStore] Failed to read audit: $error');
         return {};
       }
     }

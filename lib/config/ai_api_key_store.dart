@@ -32,8 +32,7 @@ class AiSettings {
     final savedModel = json['openRouterModel'] as String?;
     final shouldUseDefault =
         savedModel == null ||
-        savedModel == 'meta-llama/llama-3.1-8b-instruct:free' ||
-        savedModel == 'openai/gpt-oss-20b:free';
+        AppConstants.deprecatedAiModels.contains(savedModel);
     final model = shouldUseDefault ? AppConstants.defaultAiModel : savedModel;
     return AiSettings(
       openRouterApiKey: json['openRouterApiKey'] as String?,
@@ -65,7 +64,8 @@ class AiApiKeyStore {
       if (decoded is Map) {
         return AiSettings.fromJson(decoded);
       }
-    } catch (_) {
+    } catch (error) {
+      stderr.writeln('[AiApiKeyStore] Failed to read settings: $error');
       return const AiSettings();
     }
     return const AiSettings();

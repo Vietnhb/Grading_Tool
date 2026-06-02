@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/constants.dart';
 import '../core/file_name_utils.dart';
 import '../grading/grading_controller.dart';
 import 'drop_package_panel.dart';
@@ -274,9 +275,9 @@ class _StatusArea extends ConsumerWidget {
                     const SizedBox(height: 10),
                     TextField(
                       controller: openRouterModelController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'OpenRouter model',
-                        hintText: 'openai/gpt-oss-120b:free',
+                        hintText: AppConstants.defaultAiModel,
                       ),
                     ),
                   ],

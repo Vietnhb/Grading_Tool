@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:excel/excel.dart';
 
 import '../core/app_exception.dart';
+import '../core/constants.dart';
 import 'grading_models.dart';
 import 'xlsx_cell_writer.dart';
 
@@ -135,7 +136,9 @@ class ExcelGradeRepository {
     for (final sheetName in _workbook.tables.keys) {
       final sheet = _workbook[sheetName];
       final rows = sheet.rows;
-      final maxRows = rows.length < 20 ? rows.length : 20;
+      final maxRows = rows.length < AppConstants.maxHeaderScanRows
+          ? rows.length
+          : AppConstants.maxHeaderScanRows;
       for (var rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
         final headers = _headerValues(rows, rowIndex);
         final aliasColumn = _findColumn(headers, const ['alias']);

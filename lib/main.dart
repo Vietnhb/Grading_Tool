@@ -14,7 +14,7 @@ class GradingToolApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'PMG201c Grading Tool',
+      title: 'Lecturer Grading Tool',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF2F5E5E),

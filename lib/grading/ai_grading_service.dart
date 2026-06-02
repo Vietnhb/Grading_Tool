@@ -294,8 +294,9 @@ class AiRubricExtractor {
           collectingMistakes = false;
         case ParagraphBlock(:final text):
           final normalized = text.toLowerCase();
-          if (normalized.contains('lỗi thường gặp') ||
-              normalized.contains('common mistake')) {
+          if (AppConstants.commonMistakesKeywords.any(
+              (keyword) => normalized.contains(keyword),
+          )) {
             collectingMistakes = true;
           } else if (collectingMistakes && text.trim().isNotEmpty) {
             currentMistakes.add(text.trim());
@@ -461,9 +462,9 @@ class OpenRouterGradingService {
   OpenRouterGradingService({
     HttpClient? httpClient,
     String? apiKey,
-    this.model = 'openai/gpt-oss-120b:free',
+    this.model = AppConstants.defaultAiModel,
   }) : _httpClient = httpClient ?? HttpClient(),
-       _apiKey = apiKey ?? Platform.environment['OPENROUTER_API_KEY'];
+       _apiKey = apiKey;
 
   final HttpClient _httpClient;
   String? _apiKey;
@@ -473,7 +474,7 @@ class OpenRouterGradingService {
 
   String get apiKeyPreview {
     final apiKey = _apiKey;
-    if (apiKey == null || apiKey.length < 8) {
+    if (apiKey == null || apiKey.length < AppConstants.apiKeyPreviewMinLength) {
       return '';
     }
     return '${apiKey.substring(0, 7)}...${apiKey.substring(apiKey.length - 4)}';
@@ -548,13 +549,13 @@ class OpenRouterGradingService {
     required String apiKey,
   }) async {
     final httpRequest = await _httpClient.postUrl(
-      Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+      Uri.parse(AppConstants.openRouterApiUrl),
     );
     httpRequest.headers
       ..contentType = ContentType.json
       ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
-      ..set('HTTP-Referer', 'http://localhost/lecturer-grading-tool')
-      ..set('X-Title', 'Lecturer Grading Tool');
+      ..set('HTTP-Referer', AppConstants.openRouterReferer)
+      ..set('X-Title', AppConstants.openRouterAppTitle);
     final payload = _payloadFor(request);
     final payloadJson = jsonEncode(payload);
     httpRequest.write(payloadJson);
@@ -608,7 +609,7 @@ class OpenRouterGradingService {
       );
     }
 
-    final decodedJson = jsonDecode(normalizeAiJsonResponse(content));
+    final decodedJson = jsonDecode(_normalizeAiJsonResponse(content));
     if (decodedJson is! Map<String, dynamic>) {
       throw const AiGradingException(
         'AI output is not a JSON object. No score was applied.',
@@ -660,7 +661,7 @@ class OpenRouterGradingService {
       );
     }
 
-    final decodedJson = jsonDecode(normalizeAiJsonResponse(content));
+    final decodedJson = jsonDecode(_normalizeAiJsonResponse(content));
     if (decodedJson is! Map<String, dynamic>) {
       throw const AiGradingException(
         'AI batch output is not a JSON object. No score was applied.',
@@ -845,7 +846,7 @@ class OpenRouterGradingService {
     return null;
   }
 
-  String normalizeAiJsonResponse(String raw) {
+  String _normalizeAiJsonResponse(String raw) {
     var normalized = raw.trim();
     if (normalized.startsWith('```')) {
       normalized = normalized.substring(3).trimLeft();
