@@ -6,7 +6,6 @@ import '../core/constants.dart';
 import '../config/ai_api_key_store.dart';
 import 'grading_models.dart';
 
-const _aiRequestTimeout = AppConstants.aiRequestTimeout;
 
 class AiRubricCriterion {
   const AiRubricCriterion({
@@ -560,7 +559,7 @@ class OpenRouterGradingService {
     final payloadJson = jsonEncode(payload);
     httpRequest.write(payloadJson);
 
-    final response = await httpRequest.close().timeout(_aiRequestTimeout);
+    final response = await httpRequest.close().timeout(AppConstants.aiRequestTimeout);
     final body = await utf8.decodeStream(response);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiGradingException('OpenRouter request failed: $body');
@@ -588,10 +587,6 @@ class OpenRouterGradingService {
     if (content == null || content.trim().isEmpty) {
       if (firstChoice['text'] is String) {
         content = firstChoice['text'] as String;
-      } else if (message is Map && message['reasoning'] is String) {
-        content = message['reasoning'] as String;
-      } else if (message is Map && message['reasoning_content'] is String) {
-        content = message['reasoning_content'] as String;
       } else if (message is Map && message['refusal'] != null) {
         throw AiGradingException(
           'OpenRouter refused response: ${message['refusal']}',
@@ -623,16 +618,16 @@ class OpenRouterGradingService {
     required String apiKey,
   }) async {
     final httpRequest = await _httpClient.postUrl(
-      Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+      Uri.parse(AppConstants.openRouterApiUrl),
     );
     httpRequest.headers
       ..contentType = ContentType.json
       ..set(HttpHeaders.authorizationHeader, 'Bearer $apiKey')
-      ..set('HTTP-Referer', 'http://localhost/lecturer-grading-tool')
-      ..set('X-Title', 'Lecturer Grading Tool');
+      ..set('HTTP-Referer', AppConstants.openRouterReferer)
+      ..set('X-Title', AppConstants.openRouterAppTitle);
     httpRequest.write(jsonEncode(_batchPayloadFor(request)));
 
-    final response = await httpRequest.close().timeout(_aiRequestTimeout);
+    final response = await httpRequest.close().timeout(AppConstants.aiRequestTimeout);
     final body = await utf8.decodeStream(response);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AiGradingException('OpenRouter request failed: $body');

@@ -1,14 +1,15 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
 import '../core/app_exception.dart';
+import '../core/constants.dart';
 
 class QuestionOcrReader {
   const QuestionOcrReader({
-    this.minimumTextLength = 200,
-    this.minimumQuestionHeadings = 1,
+    this.minimumTextLength = AppConstants.ocrMinTextLength,
+    this.minimumQuestionHeadings = AppConstants.ocrMinQuestionHeadings,
   });
 
   final int minimumTextLength;
@@ -22,7 +23,7 @@ class QuestionOcrReader {
       p.join(outputDirectory.path, 'question_alpha_ocr.png'),
     );
     final scriptFile = File(p.join(outputDirectory.path, 'question_ocr.ps1'))
-      ..writeAsStringSync(_windowsOcrScript);
+      ..writeAsStringSync(_windowsOcrScript(AppConstants.ocrLanguage));
 
     try {
       final result = await Process.run('powershell.exe', [
@@ -80,7 +81,7 @@ class QuestionOcrReader {
     ).allMatches(text).length;
 
     if (text.length < minimumTextLength ||
-        lineCount < 3 ||
+        lineCount < AppConstants.ocrMinLineCount ||
         questionHeadings < minimumQuestionHeadings) {
       throw AppException(
         'OCR text from $imageName is not reliable enough for AI grading. '
@@ -91,7 +92,10 @@ class QuestionOcrReader {
   }
 }
 
-const _windowsOcrScript = r'''
+String _windowsOcrScript(String ocrLanguage) =>
+    _windowsOcrScriptTemplate.replaceAll('__OCR_LANGUAGE__', ocrLanguage);
+
+const _windowsOcrScriptTemplate = r'''
 param(
   [Parameter(Mandatory=$true)][string]$InputImage,
   [Parameter(Mandatory=$true)][string]$ProcessedImage
@@ -223,7 +227,7 @@ $file = AwaitOp ([Windows.Storage.StorageFile]::GetFileFromPathAsync($ProcessedI
 $stream = AwaitOp ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
 $decoder = AwaitOp ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
 $bitmap = AwaitOp ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('en-US'))
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage([Windows.Globalization.Language]::new('__OCR_LANGUAGE__'))
 $result = AwaitOp ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
 
 $lines = @()
@@ -240,10 +244,11 @@ foreach ($line in $result.Lines) {
 
 [pscustomobject]@{
   engine = 'Windows.Media.Ocr'
-  language = 'en-US'
+  language = '__OCR_LANGUAGE__'
   preprocessing = 'alpha-mask crop white-background black-text scale-2x'
   text = $result.Text
   lineCount = $lines.Count
   lines = $lines
 } | ConvertTo-Json -Depth 6
 ''';
+

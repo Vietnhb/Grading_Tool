@@ -68,6 +68,7 @@ class AiApiKeyStore {
       stderr.writeln('[AiApiKeyStore] Failed to read settings: $error');
       return const AiSettings();
     }
+    stderr.writeln('[AiApiKeyStore] Settings file contains non-Map JSON; using defaults.');
     return const AiSettings();
   }
 

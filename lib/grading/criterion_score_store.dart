@@ -128,12 +128,7 @@ class CriterionScoreStore {
     if (rawScores is Map) {
       return _parseScoreMap(rawScores);
     }
-    final rawResponse = typedBranch['rawAiResponse'];
-    if (rawResponse is! Map) {
-      return null;
-    }
-    final responseScores = rawResponse['scores'];
-    return responseScores is Map ? _parseScoreMap(responseScores) : null;
+    return null;
   }
 
   AiGradeSuggestion? _aiSuggestionFrom(
@@ -149,7 +144,7 @@ class CriterionScoreStore {
       return null;
     }
     final warnings = _parseStringList(branch['warnings']);
-    if (_isSuspiciousAllZero(questionScores, warnings)) {
+    if (_isSuspiciousAllZero(questionScores)) {
       return null;
     }
     return AiGradeSuggestion(
@@ -160,7 +155,7 @@ class CriterionScoreStore {
     );
   }
 
-  bool _isSuspiciousAllZero(List<int?> questionScores, List<String> warnings) {
+  bool _isSuspiciousAllZero(List<int?> questionScores) {
     final allZero =
         questionScores.isNotEmpty &&
         questionScores.every((score) => score != null && score == 0);

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../core/app_exception.dart';
+import '../core/constants.dart';
 import '../core/file_name_utils.dart';
 import 'submission_models.dart';
 
@@ -16,7 +17,7 @@ class PackageDetector {
     }
 
     final rootFiles = await _files(root);
-    final solutions = Directory(p.join(root.path, 'Student_Solutions'));
+    final solutions = Directory(p.join(root.path, AppConstants.studentSolutionsFolder));
     if (!solutions.existsSync()) {
       throw const AppException('Student_Solutions folder not found.');
     }
@@ -24,7 +25,7 @@ class PackageDetector {
     final studentFiles =
         (await _files(
             solutions,
-          )).where((file) => extensionOf(file) == '.txt').toList()
+          )).where((file) => extensionOf(file) == AppConstants.submissionExtension).toList()
           ..sort((a, b) => compareAliases(aliasFromFile(a), aliasFromFile(b)));
     // Sau khi co danh sach file .txt, controller se dung alias cua tung file
     // de map voi dong tuong ung trong Excel.
@@ -36,20 +37,20 @@ class PackageDetector {
       rootDirectory: root,
       markSheetFile: _single(
         rootFiles,
-        (file) => {'.xlsx'}.contains(extensionOf(file)),
+        (file) => extensionOf(file) == AppConstants.markInputExtension,
         'No XLSX mark input file was found.',
         'More than one XLSX mark input file was found.',
       ),
       studentFiles: studentFiles,
       gradingGuideFile: _single(
         rootFiles,
-        (file) => extensionOf(file) == '.docx',
+        (file) => extensionOf(file) == AppConstants.gradingGuideExtension,
         'No DOCX grading guide was found.',
         'More than one DOCX grading guide was found.',
       ),
       questionImageFile: _single(
         rootFiles,
-        (file) => {'.png', '.jpg', '.jpeg'}.contains(extensionOf(file)),
+        (file) => AppConstants.supportedImageExtensions.contains(extensionOf(file)),
         'No question image was found.',
         'More than one question image was found.',
       ),

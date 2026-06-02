@@ -819,138 +819,78 @@ class GradingController extends Notifier<GradingState> {
       var acceptedCount = 0;
 
       _openRouterGradingService.setModel(state.openRouterModel);
-      const chunkSize = 1;
-      for (
-        var start = 0;
-        start < parsedSubmissions.length;
-        start += chunkSize
-      ) {
-        final nextEnd = start + chunkSize;
-        final end = nextEnd > parsedSubmissions.length
-            ? parsedSubmissions.length
-            : nextEnd;
-        final chunk = parsedSubmissions.sublist(start, end);
+      for (var index = 0; index < parsedSubmissions.length; index += 1) {
+        final submission = parsedSubmissions[index];
         if (_isDisposed) {
           return;
         }
         state = state.copyWith(
           statusMessage:
-              'AI batch grading ${start + 1}-$end/${parsedSubmissions.length}...',
+              'AI batch grading ${index + 1}/${parsedSubmissions.length}...',
         );
 
-        late final AiBatchGradingResult batchResult;
+        AiGradingResult? result;
         try {
-          batchResult = chunk.length == 1
-              ? AiBatchGradingResult(
-                  results: {
-                    chunk.first.alias: await _openRouterGradingService.grade(
-                      AiGradingRequest(
-                        submission: chunk.first,
-                        criteria: criteria,
-                        questionCount: firstEntry.requestScores.length,
-                        packageContext: state.packageContext,
-                      ),
-                    ),
-                  },
-                )
-              : await _openRouterGradingService.gradeBatch(
-                  AiBatchGradingRequest(
-                    submissions: chunk,
-                    criteria: criteria,
-                    questionCount: firstEntry.requestScores.length,
-                    packageContext: state.packageContext,
-                  ),
-                );
-        } catch (error) {
-          for (final submission in chunk) {
-            await _aiAuditLog.saveAi(
-              packageDirectory: package.rootDirectory,
+          result = await _openRouterGradingService.grade(
+            AiGradingRequest(
               submission: submission,
-              model: _activeModelName(),
-              rawResult: null,
-              validation: null,
-              error: error,
-            );
-            if (_isDisposed) {
-              return;
-            }
-            errors.add('${submission.alias}: ${_messageFor(error)}');
-          }
-          continue;
-        }
-
-        for (final submission in chunk) {
-          final entry = state.entries[submission.alias];
-          final result = batchResult.results[submission.alias];
-          final resultError = batchResult.errors[submission.alias];
-          AiValidationResult? validation;
-
-          if (entry == null) {
-            errors.add('${submission.alias}: grade entry not found.');
-            continue;
-          }
-
-          if (resultError != null) {
-            final error = AiGradingException(resultError);
-            await _aiAuditLog.saveAi(
-              packageDirectory: package.rootDirectory,
-              submission: submission,
-              model: _activeModelName(),
-              rawResult: null,
-              validation: null,
-              error: error,
-            );
-            errors.add('${submission.alias}: $resultError');
-            continue;
-          }
-
-          if (result == null) {
-            final error = AiGradingException(
-              'AI batch response did not include alias ${submission.alias}.',
-            );
-            await _aiAuditLog.saveAi(
-              packageDirectory: package.rootDirectory,
-              submission: submission,
-              model: _activeModelName(),
-              rawResult: null,
-              validation: null,
-              error: error,
-            );
-            errors.add('${submission.alias}: missing from AI response.');
-            continue;
-          }
-
-          validation = _aiValidator.validate(
-            result: result,
-            rubric: criteria,
-            questionCount: entry.requestScores.length,
-            submissionContent: submission.content,
+              criteria: criteria,
+              questionCount: firstEntry.requestScores.length,
+              packageContext: state.packageContext,
+            ),
           );
-
+        } catch (error) {
           await _aiAuditLog.saveAi(
             packageDirectory: package.rootDirectory,
             submission: submission,
             model: _activeModelName(),
-            rawResult: result,
-            validation: validation,
+            rawResult: null,
+            validation: null,
+            error: error,
           );
           if (_isDisposed) {
             return;
           }
-
-          if (!validation.accepted) {
-            errors.add('${submission.alias}: ${validation.errors.join('; ')}');
-            continue;
-          }
-
-          suggestions[submission.alias] = AiGradeSuggestion(
-            questionScores: validation.questionScores,
-            criterionScores: validation.criterionScores,
-            comments: result.comments,
-            warnings: validation.warnings,
-          );
-          acceptedCount += 1;
+          errors.add('${submission.alias}: ${_messageFor(error)}');
+          continue;
         }
+
+        final entry = state.entries[submission.alias];
+        if (entry == null) {
+          errors.add('${submission.alias}: grade entry not found.');
+          continue;
+        }
+
+        final validation = _aiValidator.validate(
+          result: result,
+          rubric: criteria,
+          questionCount: entry.requestScores.length,
+          submissionContent: submission.content,
+        );
+
+        await _aiAuditLog.saveAi(
+          packageDirectory: package.rootDirectory,
+          submission: submission,
+          model: _activeModelName(),
+          rawResult: result,
+          validation: validation,
+        );
+        if (_isDisposed) {
+          return;
+        }
+
+        if (!validation.accepted) {
+          errors.add('${submission.alias}: ${validation.errors.join('; ')}');
+          continue;
+        }
+
+        suggestions[submission.alias] = AiGradeSuggestion(
+          questionScores: validation.questionScores,
+          criterionScores: validation.criterionScores,
+          comments: result.comments,
+          warnings: validation.warnings,
+        );
+        acceptedCount += 1;
 
         if (_isDisposed) {
           return;
