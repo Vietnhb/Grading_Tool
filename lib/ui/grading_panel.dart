@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../grading/ai_grading_service.dart';
 import '../grading/grading_models.dart';
+import 'grading_summary_section.dart';
 
 class GradingPanel extends StatefulWidget {
   const GradingPanel({
@@ -14,11 +15,18 @@ class GradingPanel extends StatefulWidget {
     required this.rubricCriteria,
     required this.criterionScores,
     required this.aiSuggestion,
+    required this.packageContext,
+    required this.aliasScoreOverview,
+    required this.aiBatchRemaining,
+    required this.aiBatchTotal,
+    required this.aiApplyRemaining,
     required this.onScoreChanged,
     required this.onCriterionScoreChanged,
     required this.onCommentChanged,
     required this.onAutoSaveChanged,
     required this.onAiSuggest,
+    required this.onAiBatchSuggest,
+    required this.onApplyAiBatch,
     required this.onApplyAiSuggestion,
     required this.onSave,
     this.showMarker = true,
@@ -34,6 +42,11 @@ class GradingPanel extends StatefulWidget {
   final List<AiRubricCriterion> rubricCriteria;
   final Map<String, int?> criterionScores;
   final AiGradeSuggestion? aiSuggestion;
+  final String packageContext;
+  final List<AliasScoreOverview> aliasScoreOverview;
+  final int aiBatchRemaining;
+  final int aiBatchTotal;
+  final int aiApplyRemaining;
   final bool showMarker;
   final Map<int, int> maxScores;
   final void Function(int questionIndex, int? score) onScoreChanged;
@@ -41,6 +54,8 @@ class GradingPanel extends StatefulWidget {
   final ValueChanged<String> onCommentChanged;
   final ValueChanged<bool> onAutoSaveChanged;
   final VoidCallback onAiSuggest;
+  final VoidCallback onAiBatchSuggest;
+  final VoidCallback onApplyAiBatch;
   final VoidCallback onApplyAiSuggestion;
   final VoidCallback onSave;
 
@@ -107,7 +122,7 @@ class _GradingPanelState extends State<GradingPanel> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 340,
+      width: 390,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: const BoxDecoration(
         color: Colors.white,
@@ -211,10 +226,24 @@ class _GradingPanelState extends State<GradingPanel> {
 
   Widget _selectedModeView() {
     return switch (_mode) {
-      _GradingPanelMode.summary => _SummarySection(
+      _GradingPanelMode.summary => SummarySection(
         teacherTotal: widget.entry.total,
         aiTotal: widget.aiSuggestion?.total,
+        teacherScores: widget.entry.requestScores,
+        aiScores: widget.aiSuggestion?.questionScores,
+        criteria: widget.rubricCriteria,
+        teacherCriterionScores: widget.criterionScores,
+        aiCriterionScores: widget.aiSuggestion?.criterionScores ?? const {},
+        aliasScoreOverview: widget.aliasScoreOverview,
         isDirty: widget.isDirty,
+        packageContext: widget.packageContext,
+        isAiGrading: widget.isAiGrading,
+        isSaving: widget.isSaving,
+        aiBatchRemaining: widget.aiBatchRemaining,
+        aiBatchTotal: widget.aiBatchTotal,
+        aiApplyRemaining: widget.aiApplyRemaining,
+        onAiBatchSuggest: widget.onAiBatchSuggest,
+        onApplyAiBatch: widget.onApplyAiBatch,
       ),
       _GradingPanelMode.teacher => _TeacherGradingSection(
         entry: widget.entry,
@@ -235,8 +264,11 @@ class _GradingPanelState extends State<GradingPanel> {
       _GradingPanelMode.ai => _AiGradingSection(
         suggestion: widget.aiSuggestion,
         criteria: widget.rubricCriteria,
+        packageContext: widget.packageContext,
+        aiBatchRemaining: widget.aiBatchRemaining,
         isAiGrading: widget.isAiGrading,
         onAiSuggest: widget.onAiSuggest,
+        onAiBatchSuggest: widget.onAiBatchSuggest,
         onApply: widget.onApplyAiSuggestion,
       ),
     };
@@ -319,10 +351,7 @@ class _GradingPanelState extends State<GradingPanel> {
 }
 
 class _GradingModeTabs extends StatelessWidget {
-  const _GradingModeTabs({
-    required this.selected,
-    required this.onChanged,
-  });
+  const _GradingModeTabs({required this.selected, required this.onChanged});
 
   final _GradingPanelMode selected;
   final ValueChanged<_GradingPanelMode> onChanged;
@@ -471,10 +500,7 @@ class _TeacherGradingSection extends StatelessWidget {
             filled: true,
             fillColor: const Color(0xFFFAFCFC),
             hintText: 'Add a teacher comment...',
-            hintStyle: const TextStyle(
-              color: Color(0xFFA0A7A7),
-              fontSize: 14,
-            ),
+            hintStyle: const TextStyle(color: Color(0xFFA0A7A7), fontSize: 14),
             contentPadding: const EdgeInsets.all(14),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
@@ -513,10 +539,7 @@ class _TeacherGradingSection extends StatelessWidget {
                 : const Icon(Icons.save_rounded, size: 20),
             label: Text(
               isDirty ? 'Save teacher grade' : 'Teacher grade saved',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
             ),
           ),
         ),
@@ -529,20 +552,27 @@ class _AiGradingSection extends StatelessWidget {
   const _AiGradingSection({
     required this.suggestion,
     required this.criteria,
+    required this.packageContext,
+    required this.aiBatchRemaining,
     required this.isAiGrading,
     required this.onAiSuggest,
+    required this.onAiBatchSuggest,
     required this.onApply,
   });
 
   final AiGradeSuggestion? suggestion;
   final List<AiRubricCriterion> criteria;
+  final String packageContext;
+  final int aiBatchRemaining;
   final bool isAiGrading;
   final VoidCallback onAiSuggest;
+  final VoidCallback onAiBatchSuggest;
   final VoidCallback onApply;
 
   @override
   Widget build(BuildContext context) {
     final currentSuggestion = suggestion;
+    final hasPackageContext = packageContext.trim().isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -570,6 +600,14 @@ class _AiGradingSection extends StatelessWidget {
             label: Text(isAiGrading ? 'AI grading...' : 'Run AI grading'),
           ),
         ),
+        if (!hasPackageContext) ...[
+          const SizedBox(height: 10),
+          const Text(
+            'Package context is empty. AI suggestions may be less accurate.',
+            style: TextStyle(color: Color(0xFF6B7272), fontSize: 12),
+          ),
+        ],
+
         const SizedBox(height: 12),
         if (currentSuggestion == null)
           const Text(
@@ -583,10 +621,7 @@ class _AiGradingSection extends StatelessWidget {
             color: const Color(0xFFEAF2FB),
           ),
           const SizedBox(height: 10),
-          _AiRequestScores(
-            criteria: criteria,
-            suggestion: currentSuggestion,
-          ),
+          _AiRequestScores(criteria: criteria, suggestion: currentSuggestion),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: onApply,
@@ -600,10 +635,7 @@ class _AiGradingSection extends StatelessWidget {
 }
 
 class _AiRequestScores extends StatelessWidget {
-  const _AiRequestScores({
-    required this.criteria,
-    required this.suggestion,
-  });
+  const _AiRequestScores({required this.criteria, required this.suggestion});
 
   final List<AiRubricCriterion> criteria;
   final AiGradeSuggestion suggestion;
@@ -619,13 +651,13 @@ class _AiRequestScores extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final group in sortedGroups) aiRequestCard(group: group),
-      ],
+      children: [for (final group in sortedGroups) aiRequestCard(group: group)],
     );
   }
 
-  Widget aiRequestCard({required MapEntry<int, List<AiRubricCriterion>> group}) {
+  Widget aiRequestCard({
+    required MapEntry<int, List<AiRubricCriterion>> group,
+  }) {
     final requestComment = _requestComment(group.value);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -747,58 +779,6 @@ class _AiRequestScores extends StatelessWidget {
         if (_commentFor(criterion).isNotEmpty)
           '${criterion.id}: ${_commentFor(criterion)}',
     ].join('\n');
-  }
-}
-
-class _SummarySection extends StatelessWidget {
-  const _SummarySection({
-    required this.teacherTotal,
-    required this.aiTotal,
-    required this.isDirty,
-  });
-
-  final int teacherTotal;
-  final int? aiTotal;
-  final bool isDirty;
-
-  @override
-  Widget build(BuildContext context) {
-    final difference = aiTotal == null ? null : teacherTotal - aiTotal!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _TotalRow(
-          label: 'Teacher Total',
-          value: teacherTotal.toString(),
-          color: const Color(0xFFE8F3F1),
-        ),
-        const SizedBox(height: 8),
-        _TotalRow(
-          label: 'AI Total',
-          value: aiTotal?.toString() ?? 'Not run',
-          color: const Color(0xFFEAF2FB),
-        ),
-        const SizedBox(height: 8),
-        _TotalRow(
-          label: 'Teacher - AI',
-          value: difference == null
-              ? 'N/A'
-              : difference > 0
-              ? '+$difference'
-              : difference.toString(),
-          color: const Color(0xFFF6F7F7),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          isDirty ? 'Teacher grade has unsaved changes.' : 'Teacher grade is saved.',
-          style: const TextStyle(
-            color: Color(0xFF6B7272),
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
   }
 }
 

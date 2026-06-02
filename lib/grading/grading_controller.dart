@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
 
 import '../core/app_exception.dart';
 import '../core/constants.dart';
@@ -11,6 +10,7 @@ import '../config/ai_api_key_store.dart';
 import 'ai_grading_audit_log.dart';
 import 'ai_grading_service.dart';
 import 'ai_grading_validator.dart';
+import 'criterion_score_store.dart';
 import 'grading_models.dart';
 import '../document/docx_parser.dart';
 import '../document/question_ocr_reader.dart';
@@ -85,6 +85,22 @@ class GradingState {
   AiGradeSuggestion? get currentAiSuggestion => currentSubmission == null
       ? null
       : aiSuggestions[currentSubmission!.alias];
+
+  bool isAiApplyPending(String alias) {
+    final entry = entries[alias];
+    final suggestion = aiSuggestions[alias];
+    if (entry == null || suggestion == null) {
+      return false;
+    }
+    final teacherCriteria = criterionScores[alias] ?? const {};
+    final hasTeacherGrade =
+        entry.requestScores.any((score) => score != null) ||
+        teacherCriteria.values.any((score) => score != null);
+    if (hasTeacherGrade) {
+      return false;
+    }
+    return true;
+  }
 
   List<File> get visibleSubmissions {
     if (selectedMarker.isEmpty) {
@@ -187,10 +203,17 @@ class GradingController extends Notifier<GradingState> {
   final AiApiKeyStore _aiApiKeyStore = const AiApiKeyStore();
   final AiGradingValidator _aiValidator = const AiGradingValidator();
   final AiGradingAuditLog _aiAuditLog = const AiGradingAuditLog();
+  final CriterionScoreStore _criterionScoreStore = const CriterionScoreStore();
   Map<String, GradingEntry> _lastSavedEntries = {};
+  var _isDisposed = false;
 
   @override
   GradingState build() {
+    _isDisposed = false;
+    ref.onDispose(() {
+      _isDisposed = true;
+    });
+
     final settings = _aiApiKeyStore.read();
     if (settings.openRouterApiKey != null &&
         !isValidOpenRouterApiKey(settings.openRouterApiKey)) {
@@ -240,17 +263,26 @@ class GradingController extends Notifier<GradingState> {
       );
       final rubricCriteria = _rubricExtractor.extract(guide);
       final packageContext = _buildPackageContext(
-        examPackage: examPackage,
         rubricCriteria: rubricCriteria,
-        guide: guide,
         questionImageText: questionImageText,
+      );
+      final criterionScores = await _criterionScoreStore.load(
+        packageDirectory: examPackage.rootDirectory,
+        aliases: aliases,
+        criteria: rubricCriteria,
+      );
+      final aiSuggestions = await _criterionScoreStore.loadAiSuggestions(
+        packageDirectory: examPackage.rootDirectory,
+        aliases: aliases,
+        criteria: rubricCriteria,
       );
       _lastSavedEntries = Map<String, GradingEntry>.from(entries);
       state = state.copyWith(
         package: examPackage,
         submissions: examPackage.studentFiles,
         entries: entries,
-        aiSuggestions: const {},
+        criterionScores: criterionScores,
+        aiSuggestions: aiSuggestions,
         markerOptions: markerOptions,
         selectedMarker: '',
         gradingGuide: guide,
@@ -300,6 +332,14 @@ class GradingController extends Notifier<GradingState> {
     );
     try {
       await _repository.saveEntry(entry);
+      final package = state.package;
+      if (package != null) {
+        await _criterionScoreStore.saveTeacher(
+          packageDirectory: package.rootDirectory,
+          entry: entry,
+          criterionScores: state.currentCriterionScores,
+        );
+      }
       _lastSavedEntries[entry.alias] = entry;
       state = state.copyWith(
         isDirty: false,
@@ -355,7 +395,8 @@ class GradingController extends Notifier<GradingState> {
     );
     if (targetIndex < 0) {
       state = state.copyWith(
-        errorMessage: 'Alias $normalizedAlias was not found in the current list.',
+        errorMessage:
+            'Alias $normalizedAlias was not found in the current list.',
         statusMessage: 'Alias not found.',
       );
       return false;
@@ -543,6 +584,93 @@ class GradingController extends Notifier<GradingState> {
     );
   }
 
+  Future<void> applyAiSuggestionsToVisibleBatch() async {
+    final package = state.package;
+    if (package == null) {
+      return;
+    }
+
+    final targets = [
+      for (final file in state.visibleSubmissions)
+        if (state.isAiApplyPending(aliasFromFile(file))) aliasFromFile(file),
+    ];
+
+    if (targets.isEmpty) {
+      state = state.copyWith(
+        statusMessage: 'No AI suggestions to apply in this scope.',
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      isSaving: true,
+      clearError: true,
+      statusMessage: 'Applying AI to ${targets.length} teacher grades...',
+    );
+
+    final entries = Map<String, GradingEntry>.from(state.entries);
+    final allCriterionScores = Map<String, Map<String, int?>>.from(
+      state.criterionScores,
+    );
+    final errors = <String>[];
+    var appliedCount = 0;
+
+    try {
+      for (final alias in targets) {
+        final entry = entries[alias];
+        final suggestion = state.aiSuggestions[alias];
+        if (entry == null || suggestion == null) {
+          errors.add('$alias: missing entry or AI suggestion.');
+          continue;
+        }
+
+        final appliedEntry = entry.copyWith(
+          requestScores: List<int?>.from(suggestion.questionScores),
+          comment: suggestion.combinedComment,
+        );
+        final criterionScores = Map<String, int?>.from(
+          suggestion.criterionScores,
+        );
+
+        await _repository.saveEntry(appliedEntry);
+        await _criterionScoreStore.saveTeacher(
+          packageDirectory: package.rootDirectory,
+          entry: appliedEntry,
+          criterionScores: criterionScores,
+        );
+
+        entries[alias] = appliedEntry;
+        allCriterionScores[alias] = criterionScores;
+        _lastSavedEntries[alias] = appliedEntry;
+        appliedCount += 1;
+      }
+
+      final currentAlias = state.currentSubmission?.alias;
+      final currentEntry = currentAlias == null ? null : entries[currentAlias];
+      final currentDirty = currentEntry == null
+          ? state.isDirty
+          : !_sameEntry(currentEntry, _lastSavedEntries[currentAlias]);
+
+      state = state.copyWith(
+        entries: entries,
+        criterionScores: allCriterionScores,
+        isDirty: currentDirty,
+        errorMessage: errors.isEmpty ? null : errors.take(5).join('\n'),
+        clearError: errors.isEmpty,
+        statusMessage: errors.isEmpty
+            ? 'Applied AI to $appliedCount teacher grades.'
+            : 'Applied AI to $appliedCount/${targets.length}; ${errors.length} need review.',
+      );
+    } catch (error) {
+      state = state.copyWith(
+        errorMessage: _messageFor(error),
+        statusMessage: 'Batch apply failed.',
+      );
+    } finally {
+      state = state.copyWith(isSaving: false);
+    }
+  }
+
   Future<void> suggestAiGrade() async {
     // AI chi de xuat diem. Diem chi duoc apply vao panel sau khi qua validator.
     final package = state.package;
@@ -576,6 +704,9 @@ class GradingController extends Notifier<GradingState> {
       );
       _openRouterGradingService.setModel(state.openRouterModel);
       aiResult = await _openRouterGradingService.grade(request);
+      if (_isDisposed) {
+        return;
+      }
       validation = _aiValidator.validate(
         result: aiResult,
         rubric: criteria,
@@ -583,13 +714,16 @@ class GradingController extends Notifier<GradingState> {
         submissionContent: submission.content,
       );
 
-      await _aiAuditLog.append(
+      await _aiAuditLog.saveAi(
         packageDirectory: package.rootDirectory,
         submission: submission,
         model: _activeModelName(),
         rawResult: aiResult,
         validation: validation,
       );
+      if (_isDisposed) {
+        return;
+      }
 
       if (!validation.accepted) {
         state = state.copyWith(
@@ -608,7 +742,7 @@ class GradingController extends Notifier<GradingState> {
         statusMessage: 'AI grade suggested for ${submission.alias}.',
       );
     } catch (error) {
-      await _aiAuditLog.append(
+      await _aiAuditLog.saveAi(
         packageDirectory: package.rootDirectory,
         submission: submission,
         model: _activeModelName(),
@@ -616,12 +750,237 @@ class GradingController extends Notifier<GradingState> {
         validation: validation,
         error: error,
       );
+      if (_isDisposed) {
+        return;
+      }
       state = state.copyWith(
         errorMessage: _messageFor(error),
         statusMessage: 'AI grading failed.',
       );
     } finally {
-      state = state.copyWith(isAiGrading: false);
+      if (!_isDisposed) {
+        state = state.copyWith(isAiGrading: false);
+      }
+    }
+  }
+
+  Future<void> suggestAiGradesForVisibleBatch() async {
+    final package = state.package;
+    if (package == null) {
+      return;
+    }
+
+    final targets = [
+      for (final file in state.visibleSubmissions)
+        if (!state.aiSuggestions.containsKey(aliasFromFile(file))) file,
+    ];
+    if (targets.isEmpty) {
+      state = state.copyWith(
+        statusMessage: state.selectedMarker.isEmpty
+            ? 'All submissions already have AI grades.'
+            : 'All visible marker submissions already have AI grades.',
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      isAiGrading: true,
+      clearError: true,
+      statusMessage: 'AI batch grading ${targets.length} submissions...',
+    );
+
+    final parsedSubmissions = <StudentSubmission>[];
+    try {
+      final criteria = state.rubricCriteria;
+      if (criteria.isEmpty) {
+        throw const AiGradingException(
+          'Could not detect rubric criteria such as 1.1, 1.2 from the grading guide.',
+        );
+      }
+
+      for (final file in targets) {
+        parsedSubmissions.add(await _parser.parse(file));
+        if (_isDisposed) {
+          return;
+        }
+      }
+
+      final firstEntry = state.entries[parsedSubmissions.first.alias];
+      if (firstEntry == null) {
+        throw const AiGradingException(
+          'Could not find a grade entry for the first selected submission.',
+        );
+      }
+
+      final suggestions = Map<String, AiGradeSuggestion>.from(
+        state.aiSuggestions,
+      );
+      final errors = <String>[];
+      var acceptedCount = 0;
+
+      _openRouterGradingService.setModel(state.openRouterModel);
+      const chunkSize = 1;
+      for (
+        var start = 0;
+        start < parsedSubmissions.length;
+        start += chunkSize
+      ) {
+        final nextEnd = start + chunkSize;
+        final end = nextEnd > parsedSubmissions.length
+            ? parsedSubmissions.length
+            : nextEnd;
+        final chunk = parsedSubmissions.sublist(start, end);
+        if (_isDisposed) {
+          return;
+        }
+        state = state.copyWith(
+          statusMessage:
+              'AI batch grading ${start + 1}-$end/${parsedSubmissions.length}...',
+        );
+
+        late final AiBatchGradingResult batchResult;
+        try {
+          batchResult = chunk.length == 1
+              ? AiBatchGradingResult(
+                  results: {
+                    chunk.first.alias: await _openRouterGradingService.grade(
+                      AiGradingRequest(
+                        submission: chunk.first,
+                        criteria: criteria,
+                        questionCount: firstEntry.requestScores.length,
+                        packageContext: state.packageContext,
+                      ),
+                    ),
+                  },
+                )
+              : await _openRouterGradingService.gradeBatch(
+                  AiBatchGradingRequest(
+                    submissions: chunk,
+                    criteria: criteria,
+                    questionCount: firstEntry.requestScores.length,
+                    packageContext: state.packageContext,
+                  ),
+                );
+        } catch (error) {
+          for (final submission in chunk) {
+            await _aiAuditLog.saveAi(
+              packageDirectory: package.rootDirectory,
+              submission: submission,
+              model: _activeModelName(),
+              rawResult: null,
+              validation: null,
+              error: error,
+            );
+            if (_isDisposed) {
+              return;
+            }
+            errors.add('${submission.alias}: ${_messageFor(error)}');
+          }
+          continue;
+        }
+
+        for (final submission in chunk) {
+          final entry = state.entries[submission.alias];
+          final result = batchResult.results[submission.alias];
+          final resultError = batchResult.errors[submission.alias];
+          AiValidationResult? validation;
+
+          if (entry == null) {
+            errors.add('${submission.alias}: grade entry not found.');
+            continue;
+          }
+
+          if (resultError != null) {
+            final error = AiGradingException(resultError);
+            await _aiAuditLog.saveAi(
+              packageDirectory: package.rootDirectory,
+              submission: submission,
+              model: _activeModelName(),
+              rawResult: null,
+              validation: null,
+              error: error,
+            );
+            errors.add('${submission.alias}: $resultError');
+            continue;
+          }
+
+          if (result == null) {
+            final error = AiGradingException(
+              'AI batch response did not include alias ${submission.alias}.',
+            );
+            await _aiAuditLog.saveAi(
+              packageDirectory: package.rootDirectory,
+              submission: submission,
+              model: _activeModelName(),
+              rawResult: null,
+              validation: null,
+              error: error,
+            );
+            errors.add('${submission.alias}: missing from AI response.');
+            continue;
+          }
+
+          validation = _aiValidator.validate(
+            result: result,
+            rubric: criteria,
+            questionCount: entry.requestScores.length,
+            submissionContent: submission.content,
+          );
+
+          await _aiAuditLog.saveAi(
+            packageDirectory: package.rootDirectory,
+            submission: submission,
+            model: _activeModelName(),
+            rawResult: result,
+            validation: validation,
+          );
+          if (_isDisposed) {
+            return;
+          }
+
+          if (!validation.accepted) {
+            errors.add('${submission.alias}: ${validation.errors.join('; ')}');
+            continue;
+          }
+
+          suggestions[submission.alias] = AiGradeSuggestion(
+            questionScores: validation.questionScores,
+            criterionScores: validation.criterionScores,
+            comments: result.comments,
+            warnings: validation.warnings,
+          );
+          acceptedCount += 1;
+        }
+
+        if (_isDisposed) {
+          return;
+        }
+        state = state.copyWith(aiSuggestions: suggestions);
+      }
+
+      if (_isDisposed) {
+        return;
+      }
+      state = state.copyWith(
+        aiSuggestions: suggestions,
+        errorMessage: errors.isEmpty ? null : errors.take(5).join('\n'),
+        clearError: errors.isEmpty,
+        statusMessage: errors.isEmpty
+            ? 'AI batch suggested $acceptedCount submissions.'
+            : 'AI batch suggested $acceptedCount/${targets.length}; ${errors.length} need review.',
+      );
+    } catch (error) {
+      if (_isDisposed) {
+        return;
+      }
+      state = state.copyWith(
+        errorMessage: _messageFor(error),
+        statusMessage: 'AI batch grading failed.',
+      );
+    } finally {
+      if (!_isDisposed) {
+        state = state.copyWith(isAiGrading: false);
+      }
     }
   }
 
@@ -741,64 +1100,17 @@ class GradingController extends Notifier<GradingState> {
   }
 
   String _buildPackageContext({
-    required ExamPackage examPackage,
     required List<AiRubricCriterion> rubricCriteria,
-    required GradingGuide guide,
     required String questionImageText,
   }) {
     final buffer = StringBuffer();
-    buffer.writeln(
-      'packageAlias=${p.basenameWithoutExtension(examPackage.gradingGuideFile.path)}',
-    );
-    buffer.writeln(
-      'gradingGuideFile=${p.basename(examPackage.gradingGuideFile.path)}',
-    );
-    buffer.writeln(
-      'questionImageFile=${p.basename(examPackage.questionImageFile.path)}',
-    );
-    buffer.writeln('\n--- OCR QUESTION IMAGE TEXT ---');
+    buffer.writeln('--- EXAM QUESTION TEXT ---');
     buffer.writeln(questionImageText);
-    buffer.writeln('extractedQuestionCount=${guide.questions.length}');
-    if (guide.questions.isNotEmpty) {
-      buffer.writeln('\n--- EXAM QUESTIONS EXTRACTED FROM GRADING GUIDE ---');
-      for (final question in guide.questions) {
-        buffer.writeln('Question ${question.number}: ${question.title}');
-        if (question.content.isNotEmpty) {
-          buffer.writeln(question.content);
-        }
-      }
-    }
-    buffer.writeln('rubricCount=${rubricCriteria.length}');
     buffer.writeln(
-      '\n--- RUBRIC CHECKLIST (schema helper; full guide is authoritative) ---',
+      '\n--- RUBRIC CRITERIA (authoritative; includes common mistakes) ---',
     );
     for (final criterion in rubricCriteria) {
       buffer.writeln(criterion.toCompactPromptLine());
-    }
-    buffer.writeln('\n--- FULL GRADING GUIDE (do not summarize) ---');
-    // Keep the original guide text in the prompt for maximum grading fidelity.
-    void appendBlock(DocumentBlock block) {
-      switch (block) {
-        case SectionBlock(:final heading, :final children):
-          buffer.writeln(heading.text);
-          for (final child in children) {
-            appendBlock(child);
-          }
-        case ParagraphBlock(:final text):
-          buffer.writeln(text);
-        case BulletListBlock(:final items):
-          for (final item in items) {
-            buffer.writeln('- ${item.text}');
-          }
-        case RubricTableBlock(:final rows):
-          for (final row in rows) {
-            buffer.writeln(row.cells.join(' | '));
-          }
-      }
-    }
-
-    for (final block in guide.blocks) {
-      appendBlock(block);
     }
 
     return buffer.toString();

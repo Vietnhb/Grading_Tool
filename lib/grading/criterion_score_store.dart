@@ -14,7 +14,27 @@ class CriterionScoreStore {
   }) async {
     final aliasSet = aliases.toSet();
     final criterionIds = criteria.map((criterion) => criterion.id).toSet();
-    return _readAudit(packageDirectory, aliasSet, criterionIds);
+    final audit = await _readAudit(packageDirectory);
+    final scoresByAlias = <String, Map<String, int?>>{};
+
+    for (final alias in aliasSet) {
+      final record = audit[alias];
+      if (record == null) {
+        continue;
+      }
+
+      final teacherScores = _scoresFromBranch(record['teacher']);
+      if (teacherScores == null) {
+        continue;
+      }
+
+      final filtered = _filterScoreMap(teacherScores, criterionIds);
+      if (filtered.isNotEmpty) {
+        scoresByAlias[alias] = filtered;
+      }
+    }
+
+    return scoresByAlias;
   }
 
   Future<Map<String, AiGradeSuggestion>> loadAiSuggestions({
@@ -24,154 +44,130 @@ class CriterionScoreStore {
   }) async {
     final aliasSet = aliases.toSet();
     final criterionIds = criteria.map((criterion) => criterion.id).toSet();
-    final file = _auditFile(packageDirectory);
-    if (!await file.exists()) {
-      return {};
+    final audit = await _readAudit(packageDirectory);
+    final suggestions = <String, AiGradeSuggestion>{};
+
+    for (final alias in aliasSet) {
+      final aiBranch = audit[alias]?['ai'];
+      if (aiBranch is! Map || aiBranch['status'] != 'accepted') {
+        continue;
+      }
+
+      final suggestion = _aiSuggestionFrom(
+        Map<String, Object?>.from(aiBranch),
+        criterionIds,
+      );
+      if (suggestion != null) {
+        suggestions[alias] = suggestion;
+      }
     }
 
-    final suggestions = <String, AiGradeSuggestion>{};
-    try {
-      final lines = await file.readAsLines();
-      for (final line in lines) {
-        if (line.trim().isEmpty) {
-          continue;
-        }
-        final record = jsonDecode(line);
-        if (record is! Map<String, Object?> || record['status'] != 'accepted') {
-          continue;
-        }
-        final source = record['source']?.toString();
-        if (source != null && source != 'ai') {
-          continue;
-        }
-        final alias = record['alias'];
-        if (alias is! String || !aliasSet.contains(alias)) {
-          continue;
-        }
-        final suggestion = _aiSuggestionFrom(record, criterionIds);
-        if (suggestion != null) {
-          suggestions[alias] = suggestion;
-        }
-      }
-    } catch (_) {
-      return {};
-    }
     return suggestions;
   }
 
-  Future<void> appendTeacherSave({
+  Future<void> saveTeacher({
     required Directory packageDirectory,
     required GradingEntry entry,
     required Map<String, int?> criterionScores,
   }) async {
-    final record = <String, Object?>{
+    final audit = await _readAudit(packageDirectory);
+    final record = Map<String, Object?>.from(audit[entry.alias] ?? const {});
+    record['teacher'] = {
       'timestamp': DateTime.now().toUtc().toIso8601String(),
-      'alias': entry.alias,
-      'source': 'teacher',
       'status': 'saved',
       'questionScores': entry.requestScores,
       'criterionScores': criterionScores,
       'totalScore': entry.total,
       'comment': entry.comment,
     };
+    audit[entry.alias] = record;
+    await _writeAudit(packageDirectory, audit);
+  }
 
+  Future<Map<String, Map<String, Object?>>> _readAudit(
+    Directory packageDirectory,
+  ) async {
+    final file = _auditFile(packageDirectory);
+    if (await file.exists()) {
+      try {
+        final decoded = jsonDecode(await file.readAsString());
+        if (decoded is Map) {
+          return {
+            for (final entry in decoded.entries)
+              if (entry.value is Map)
+                entry.key.toString(): Map<String, Object?>.from(
+                  entry.value as Map,
+                ),
+          };
+        }
+      } catch (_) {
+        return {};
+      }
+    }
+
+    return {};
+  }
+
+  Future<void> _writeAudit(
+    Directory packageDirectory,
+    Map<String, Map<String, Object?>> audit,
+  ) async {
     await _auditFile(packageDirectory).writeAsString(
-      '${jsonEncode(record)}\n',
-      mode: FileMode.append,
+      const JsonEncoder.withIndent('  ').convert(audit),
       flush: true,
     );
   }
 
-  Future<Map<String, Map<String, int?>>> _readAudit(
-    Directory packageDirectory,
-    Set<String> aliases,
-    Set<String> criterionIds,
-  ) async {
-    final file = _auditFile(packageDirectory);
-    if (!await file.exists()) {
-      return {};
-    }
-
-    final aiScoresByAlias = <String, Map<String, int?>>{};
-    final teacherScoresByAlias = <String, Map<String, int?>>{};
-    try {
-      final lines = await file.readAsLines();
-      for (final line in lines) {
-        if (line.trim().isEmpty) {
-          continue;
-        }
-        final record = jsonDecode(line);
-        if (record is! Map<String, Object?>) {
-          continue;
-        }
-        final alias = record['alias'];
-        if (alias is! String || !aliases.contains(alias)) {
-          continue;
-        }
-
-        final source = record['source']?.toString();
-        if (source == 'teacher' && record['status'] == 'saved') {
-          final rawScores = record['criterionScores'];
-          if (rawScores is Map<String, Object?>) {
-            teacherScoresByAlias[alias] = _parseScoreMap(rawScores);
-          }
-          continue;
-        }
-
-        if ((source == null || source == 'ai') &&
-            record['status'] == 'accepted') {
-          final rawScores = _aiScoresFrom(record);
-          if (rawScores != null) {
-            aiScoresByAlias[alias] = _parseScoreMap(rawScores);
-          }
-        }
-      }
-    } catch (_) {
-      return {};
-    }
-
-    return _filterScores(
-      {...aiScoresByAlias, ...teacherScoresByAlias},
-      aliases,
-      criterionIds,
-    );
-  }
-
-  Map<String, Object?>? _aiScoresFrom(Map<String, Object?> record) {
-    final criterionScores = record['criterionScores'];
-    if (criterionScores is Map<String, Object?>) {
-      return criterionScores;
-    }
-    final rawResponse = record['rawAiResponse'];
-    if (rawResponse is! Map<String, Object?>) {
+  Map<String, int?>? _scoresFromBranch(Object? branch) {
+    if (branch is! Map) {
       return null;
     }
-    final rawScores = rawResponse['scores'];
-    return rawScores is Map<String, Object?> ? rawScores : null;
+    final typedBranch = Map<String, Object?>.from(branch);
+    final rawScores = typedBranch['criterionScores'];
+    if (rawScores is Map) {
+      return _parseScoreMap(rawScores);
+    }
+    final rawResponse = typedBranch['rawAiResponse'];
+    if (rawResponse is! Map) {
+      return null;
+    }
+    final responseScores = rawResponse['scores'];
+    return responseScores is Map ? _parseScoreMap(responseScores) : null;
   }
 
   AiGradeSuggestion? _aiSuggestionFrom(
-    Map<String, Object?> record,
+    Map<String, Object?> branch,
     Set<String> criterionIds,
   ) {
-    final rawScores = _aiScoresFrom(record);
+    final rawScores = _scoresFromBranch(branch);
     if (rawScores == null) {
       return null;
     }
-    final questionScores = _parseQuestionScores(record['questionScores']);
+    final questionScores = _parseQuestionScores(branch['questionScores']);
     if (questionScores.isEmpty) {
+      return null;
+    }
+    final warnings = _parseStringList(branch['warnings']);
+    if (_isSuspiciousAllZero(questionScores, warnings)) {
       return null;
     }
     return AiGradeSuggestion(
       questionScores: questionScores,
-      criterionScores: _filterScoreMap(_parseScoreMap(rawScores), criterionIds),
-      comments: _parseComments(record),
-      warnings: _parseStringList(record['warnings']),
+      criterionScores: _filterScoreMap(rawScores, criterionIds),
+      comments: _parseComments(branch),
+      warnings: warnings,
     );
   }
 
+  bool _isSuspiciousAllZero(List<int?> questionScores, List<String> warnings) {
+    final allZero =
+        questionScores.isNotEmpty &&
+        questionScores.every((score) => score != null && score == 0);
+    return allZero;
+  }
+
   List<int?> _parseQuestionScores(Object? rawScores) {
-    if (rawScores is! List<Object?>) {
+    if (rawScores is! List) {
       return const [];
     }
     return rawScores
@@ -185,23 +181,23 @@ class CriterionScoreStore {
         .toList();
   }
 
-  Map<String, String> _parseComments(Map<String, Object?> record) {
-    final rawResponse = record['rawAiResponse'];
-    if (rawResponse is! Map<String, Object?>) {
+  Map<String, String> _parseComments(Map<String, Object?> branch) {
+    final rawResponse = branch['rawAiResponse'];
+    if (rawResponse is! Map) {
       return const {};
     }
     final rawComments = rawResponse['comments'];
-    if (rawComments is! Map<String, Object?>) {
+    if (rawComments is! Map) {
       return const {};
     }
     return {
       for (final entry in rawComments.entries)
-        entry.key: entry.value?.toString() ?? '',
+        entry.key.toString(): entry.value?.toString() ?? '',
     };
   }
 
   List<String> _parseStringList(Object? rawValues) {
-    if (rawValues is! List<Object?>) {
+    if (rawValues is! List) {
       return const [];
     }
     return [
@@ -210,36 +206,17 @@ class CriterionScoreStore {
     ];
   }
 
-  Map<String, int?> _parseScoreMap(Map<String, Object?> rawScores) {
+  Map<String, int?> _parseScoreMap(Map rawScores) {
     final scores = <String, int?>{};
     for (final entry in rawScores.entries) {
       final value = entry.value;
-      scores[entry.key] = value == null
+      scores[entry.key.toString()] = value == null
           ? null
           : value is num
           ? value.round()
           : int.tryParse(value.toString());
     }
     return scores;
-  }
-
-  Map<String, Map<String, int?>> _filterScores(
-    Map<String, Map<String, int?>> rawScores,
-    Set<String> aliases,
-    Set<String> criterionIds,
-  ) {
-    final scoresByAlias = <String, Map<String, int?>>{};
-    for (final aliasEntry in rawScores.entries) {
-      if (!aliases.contains(aliasEntry.key)) {
-        continue;
-      }
-      final scores = <String, int?>{};
-      scores.addAll(_filterScoreMap(aliasEntry.value, criterionIds));
-      if (scores.isNotEmpty) {
-        scoresByAlias[aliasEntry.key] = scores;
-      }
-    }
-    return scoresByAlias;
   }
 
   Map<String, int?> _filterScoreMap(
@@ -255,7 +232,7 @@ class CriterionScoreStore {
 
   File _auditFile(Directory packageDirectory) {
     return File(
-      '${packageDirectory.path}${Platform.pathSeparator}ai_grading_audit.jsonl',
+      '${packageDirectory.path}${Platform.pathSeparator}grading_log.json',
     );
   }
 }
